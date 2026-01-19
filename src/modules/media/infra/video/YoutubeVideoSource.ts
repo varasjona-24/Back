@@ -1,0 +1,46 @@
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { VideoSource, ResolvedMediaStream } from '../../domain/usecases/types.js';
+
+export class YoutubeVideoSource implements VideoSource {
+
+  canHandle(url: string): boolean {
+    return /youtube\.com|youtu\.be/.test(url);
+  }
+
+  async getVideoStream(url: string): Promise<ResolvedMediaStream> {
+
+    const tmpDir = path.resolve('tmp');
+    await fs.promises.mkdir(tmpDir, { recursive: true });
+
+    const tmpFile = path.join(
+      tmpDir,
+      `${Date.now()}-video.mp4`
+    );
+
+    const child = spawn('yt-dlp', [
+      '-f', 'bestvideo[ext=mp4][vcodec^=avc1][height<=1080]+bestaudio[ext=m4a]/best[ext=mp4]',
+      '--merge-output-format', 'mp4',
+      '--no-playlist',
+      '-o', tmpFile,
+      url
+    ], {
+      stdio: ['ignore', 'inherit', 'inherit']
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      child.on('close', code => {
+        if (code === 0) resolve();
+        else reject(new Error(`yt-dlp exited with code ${code}`));
+      });
+    });
+
+   return {
+  stream: fs.createReadStream(tmpFile),
+  mimeType: 'video/mp4',
+  tmpFilePath: tmpFile // ✅
+};
+
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "info": {
+    "_postman_id": "b8a3c7e0-1f9a-4b8d-9f7a-1c2f0d7a9999",
+    "name": "Listenfy API",
+    "description": "Endpoints actuales del backend Listenfy",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🎵 Media",
+      "item": [
+        {
+          "name": "🔊 Stream Audio (YouTube)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/media/stream?url={{youtube_url}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "media", "stream"],
+              "query": [
+                {
+                  "key": "url",
+                  "value": "{{youtube_url}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "ℹ️ Resolve Media Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/media/resolve-info?url={{youtube_url}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "media", "resolve-info"],
+              "query": [
+                {
+                  "key": "url",
+                  "value": "{{youtube_url}}"
+                }
+              ]
+            }
+          }
+        },
+        
+        {
+          "name": "📚 Media Library (All)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3000/api/v1/media/library",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "media", "library"]
+            }
+          }
+        }
+        
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "youtube_url",
+      "value": "https://www.youtube.com/watch?v=MasKWIc6neY"
+    }
+  ]
+}

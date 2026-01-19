@@ -1,0 +1,159 @@
+{
+  "info": {
+    "_postman_id": "d91c5b30-4e5a-4c6f-9d22-8c8c12a12345",
+    "name": "Listenfy – Playlists",
+    "description": "Endpoints de Playlists para Listenfy",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "🎶 Playlists",
+      "item": [
+        {
+          "name": "➕ Create Playlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gym\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists"]
+            }
+          }
+        },
+        {
+          "name": "📋 List Playlists",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists"]
+            }
+          }
+        },
+        {
+          "name": "📂 Get Playlist by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists/{{playlist_id}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists", "{{playlist_id}}"]
+            }
+          }
+        },
+        {
+          "name": "➕ Add Media to Playlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mediaId\": \"{{media_id}}\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists/{{playlist_id}}/add",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists", "{{playlist_id}}", "add"]
+            }
+          }
+        },
+        {
+          "name": "✏️ Update Playlist Name",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Playlist Name\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists/{{playlist_id}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists", "{{playlist_id}}"]
+            }
+          }
+        }
+,
+        {
+          "name": "➖ Remove Media from Playlist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mediaId\": \"{{media_id}}\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists/{{playlist_id}}/remove",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists", "{{playlist_id}}", "remove"]
+            }
+          }
+        },
+        {
+          "name": "🗑️ Delete Playlist",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "http://localhost:3000/api/v1/playlists/{{playlist_id}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "v1", "playlists", "{{playlist_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "playlist_id",
+      "value": ""
+    },
+    {
+      "key": "media_id",
+      "value": ""
+    }
+    
+  ]
+  
+}
