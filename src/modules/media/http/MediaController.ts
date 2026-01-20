@@ -20,6 +20,7 @@ import {
   MediaKind,
   AudioFormat,
   VideoFormat,
+  DownloadQuality,
 } from '../domain/usecases/types.js';
 
 import { mediaLibrary } from '../domain/library/index.js';
@@ -123,7 +124,7 @@ export class MediaController {
    * ====================================================== */
 
   async download(req: Request, res: Response) {
-    const { url, kind, format } = req.body;
+    const { url, kind, format, quality } = req.body;
 
     if (!url || !kind || !format) {
       return res.status(400).json({
@@ -159,6 +160,7 @@ export class MediaController {
 
       const kindStr = String(kind);
       const formatStr = String(format);
+      const qualityStr = quality != null ? String(quality) : '';
 
       const isMediaKind = (v: string): v is MediaKind =>
         v === 'audio' || v === 'video';
@@ -167,6 +169,8 @@ export class MediaController {
         v === 'mp3' || v === 'm4a';
 
       const isVideoFormat = (v: string): v is VideoFormat => v === 'mp4';
+      const isDownloadQuality = (v: string): v is DownloadQuality =>
+        v === 'low' || v === 'medium' || v === 'high';
 
       if (!isMediaKind(kindStr)) {
         return res.status(400).json({ error: 'kind must be audio or video' });
@@ -180,6 +184,10 @@ export class MediaController {
 
       if (kindStr === 'video' && !isVideoFormat(formatStr)) {
         return res.status(400).json({ error: 'video format must be mp4' });
+      }
+
+      if (qualityStr && !isDownloadQuality(qualityStr)) {
+        return res.status(400).json({ error: 'quality must be low, medium, or high' });
       }
 
       // ✅ MegaVideoSource ANTES que GenericVideoSource
@@ -208,6 +216,7 @@ export class MediaController {
         url,
         kind: kindStr,
         format: resolvedFormat,
+        quality: qualityStr ? (qualityStr as DownloadQuality) : undefined,
       });
 
       return res.status(201).json({

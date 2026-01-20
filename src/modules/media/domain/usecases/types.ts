@@ -15,6 +15,8 @@ export type ResolvedAudio = {
   contentLength?: number;
 };
 
+export type DownloadQuality = 'low' | 'medium' | 'high';
+
 /**
  * Fuente de audio (streaming / descarga)
  */
@@ -24,7 +26,8 @@ export interface AudioSource {
   getAudioStream(
     url: string,
     rangeHeader?: string,
-    format?: AudioFormat
+    format?: AudioFormat,
+    quality?: DownloadQuality
   ): Promise<ResolvedAudio>;
 }
 
@@ -50,6 +53,7 @@ export type SourceOrigin =
   | 'threads'
   | 'vk'
   | '4chan'
+  | 'mega' 
   | 'generic';
 
 
@@ -74,7 +78,7 @@ export type NormalizedMediaInfo = {
   publicId: string;
 
   /** Origen */
-  source: 'youtube' | 'local' | 'facebook' | 'instagram' | string;
+  source: SourceOrigin | 'local';
 
   /** ID del origen (base64 del URL, etc.) */
   sourceId: string;
@@ -135,6 +139,7 @@ export interface VideoSource {
 
   getVideoStream(
     url: string,
-    rangeHeader?: string
+    rangeHeader?: string,
+    quality?: DownloadQuality
   ): Promise<ResolvedMediaStream>;
 }

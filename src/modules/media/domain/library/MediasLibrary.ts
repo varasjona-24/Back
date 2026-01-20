@@ -12,6 +12,12 @@ export interface MediaLibrary {
 
   getById(id: string): NormalizedMediaInfo | undefined;
 
+  updateSource(
+    mediaId: string,
+    source: NormalizedMediaInfo['source'],
+    sourceId?: string
+  ): void;
+
   /* ===============================
    * QUERIES
    * =============================== */

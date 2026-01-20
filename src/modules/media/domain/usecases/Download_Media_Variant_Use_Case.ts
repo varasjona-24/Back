@@ -8,16 +8,19 @@ import {
   MediaKind,
   AudioFormat,
   VideoFormat,
-  ResolvedMediaStream
+  ResolvedMediaStream,
+  DownloadQuality
 } from '../usecases/types.js';
 
 import { MediaLibrary } from '../../domain/library/MediasLibrary.js';
+import { detectSourceOrigin } from './Detect_Source_Origin.js';
 
 export type DownloadMediaVariantInput = {
   mediaId: string;
   url: string;
   kind: MediaKind;
   format: AudioFormat | VideoFormat;
+  quality?: DownloadQuality;
 };
 
 export class DownloadMediaVariantUseCase {
@@ -31,7 +34,10 @@ export class DownloadMediaVariantUseCase {
   ) {}
 
   async execute(input: DownloadMediaVariantInput) {
-    const { mediaId, url, kind, format } = input;
+    const { mediaId, url, kind, format, quality } = input;
+
+    const origin = detectSourceOrigin(url);
+    const sourceId = Buffer.from(url).toString('base64');
 
     /* ======================================================
      * 1️⃣ EVITAR DUPLICADOS
@@ -39,44 +45,69 @@ export class DownloadMediaVariantUseCase {
 
     const existing = this.mediaLibrary.getVariant(mediaId, kind, format);
 
-   if (existing) {
-  return {
-    filePath: existing.path, // 🔥 usar el path guardado
-    format,
-    kind
-  };
-}
+    if (existing) {
+      this.mediaLibrary.updateSource(mediaId, origin, sourceId);
 
-/* ======================================================
- * 2️⃣ DESCARGA
- * ====================================================== */
-
-const source = this.resolveSource(url, kind);
-const mediaStream = await this.getStream(source, url, kind, format);
-
-
-const fileName = this.buildFileName(mediaId, format);
-const filePath = this.buildAbsolutePath(kind, fileName);
-
-await this.ensureDir(filePath);
-await this.saveStream(mediaStream, filePath);
+      return {
+        filePath: existing.path, // 🔥 usar el path guardado
+        format,
+        kind
+      };
+    }
 
     /* ======================================================
- * 3️⃣ REGISTRO
- * ====================================================== */
+     * 2️⃣ DESCARGA
+     * ====================================================== */
 
-this.mediaLibrary.addVariant(mediaId, {
-  kind,
-  format,
-  path: filePath,
-  createdAt: Date.now()
-});
+    const source = this.resolveSource(url, kind);
+    let mediaStream: ResolvedMediaStream;
+    try {
+      mediaStream = await this.getStream(
+        source,
+        url,
+        kind,
+        format,
+        quality
+      );
+    } catch (e) {
+      if (quality) {
+        mediaStream = await this.getStream(
+          source,
+          url,
+          kind,
+          format,
+          undefined
+        );
+      } else {
+        throw e;
+      }
+    }
 
-return {
-  filePath,
-  format,
-  kind
-};
+
+    const fileName = this.buildFileName(mediaId, format);
+    const filePath = this.buildAbsolutePath(kind, fileName);
+
+    await this.ensureDir(filePath);
+    await this.saveStream(mediaStream, filePath);
+
+    /* ======================================================
+     * 3️⃣ REGISTRO
+     * ====================================================== */
+
+    this.mediaLibrary.addVariant(mediaId, {
+      kind,
+      format,
+      path: filePath,
+      createdAt: Date.now()
+    });
+
+    this.mediaLibrary.updateSource(mediaId, origin, sourceId);
+
+    return {
+      filePath,
+      format,
+      kind
+    };
 
   }
   /* ======================================================
@@ -93,19 +124,25 @@ return {
 
     return source;
   }
-  
+
 private async getStream(
   source: AudioSource | VideoSource,
   url: string,
   kind: MediaKind,
-  format: AudioFormat | VideoFormat
+  format: AudioFormat | VideoFormat,
+  quality?: DownloadQuality
 ): Promise<ResolvedMediaStream> {
 
   if (kind === 'audio') {
-    return (source as AudioSource).getAudioStream(url, undefined, format as AudioFormat);
+    return (source as AudioSource).getAudioStream(
+      url,
+      undefined,
+      format as AudioFormat,
+      quality
+    );
   }
 
-  return (source as VideoSource).getVideoStream(url);
+  return (source as VideoSource).getVideoStream(url, undefined, quality);
 }
 
 
@@ -129,21 +166,21 @@ private async getStream(
   }
 
   /* ======================================================
- * PATH HELPERS (DEFINITIVOS)
- * ====================================================== */
+   * PATH HELPERS (DEFINITIVOS)
+   * ====================================================== */
 
-private buildFileName(
-  mediaId: string,
-  format: string
-): string {
-  return `${mediaId}.${format}`;
-}
+  private buildFileName(
+    mediaId: string,
+    format: string
+  ): string {
+    return `${mediaId}.${format}`;
+  }
 
-private buildAbsolutePath(
-  kind: MediaKind,
-  fileName: string
-): string {
-  return path.join(this.basePath, kind, fileName);
-}
+  private buildAbsolutePath(
+    kind: MediaKind,
+    fileName: string
+  ): string {
+    return path.join(this.basePath, kind, fileName);
+  }
 
 }

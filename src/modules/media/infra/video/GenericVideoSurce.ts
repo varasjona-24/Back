@@ -2,7 +2,11 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-import type { VideoSource, ResolvedMediaStream } from '../../domain/usecases/types.js';
+import type {
+  VideoSource,
+  ResolvedMediaStream,
+  DownloadQuality,
+} from '../../domain/usecases/types.js';
 
 function ensureDir(pth: string) {
   return fs.promises.mkdir(pth, { recursive: true });
@@ -51,7 +55,11 @@ export class GenericVideoSource implements VideoSource {
     return true;
   }
 
-  async getVideoStream(url: string): Promise<ResolvedMediaStream> {
+  async getVideoStream(
+    url: string,
+    _range?: string,
+    quality: DownloadQuality = 'high'
+  ): Promise<ResolvedMediaStream> {
     const tmpDir = path.resolve('tmp');
     await ensureDir(tmpDir);
 
@@ -59,9 +67,10 @@ export class GenericVideoSource implements VideoSource {
 
     // 1) Intentar con yt-dlp
     try {
+      const format = this.buildFormat(quality);
       const ytdlpArgs = [
         '--no-playlist',
-        '-f', 'bv*+ba/b',
+        '-f', format,
         '--merge-output-format', 'mp4',
         '-o', tmpFile,
         url,
@@ -126,6 +135,18 @@ export class GenericVideoSource implements VideoSource {
       // console.error('[GenericVideoSource] ffmpeg fallback failed:', e);
 
       throw new Error(msg);
+    }
+  }
+
+  private buildFormat(quality: DownloadQuality): string {
+    switch (quality) {
+      case 'low':
+        return 'bv*[height<=360]+ba/b[height<=360]';
+      case 'medium':
+        return 'bv*[height<=720]+ba/b[height<=720]';
+      case 'high':
+      default:
+        return 'bv*+ba/b';
     }
   }
 }

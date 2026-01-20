@@ -6,7 +6,8 @@ import {
   AudioSource,
   //ResolvedAudio,
   AudioFormat,
-  ResolvedMediaStream
+  ResolvedMediaStream,
+  DownloadQuality
 } from '../../domain/usecases/types.js';
 
 export class YoutubeAudioSource implements AudioSource {
@@ -20,17 +21,24 @@ export class YoutubeAudioSource implements AudioSource {
    * - Por defecto devuelve MP3 (ideal para móvil)
    * - Compatible con streaming y descarga
    */
- async getAudioStream(url: string, _range?: string, format: AudioFormat = 'm4a'): Promise<ResolvedMediaStream> {
+ async getAudioStream(
+  url: string,
+  _range?: string,
+  format: AudioFormat = 'm4a',
+  quality: DownloadQuality = 'high'
+ ): Promise<ResolvedMediaStream> {
   const tmpDir = path.join(process.cwd(), 'tmp');
   await fs.promises.mkdir(tmpDir, { recursive: true });
 
   const tmpFilePath = path.join(tmpDir, `${Date.now()}-generic-audio.${format}`);
 
+  const audioQuality = this.mapQuality(quality);
+
   return new Promise((resolve, reject) => {
     const child = spawn('yt-dlp', [
       '-x',
       '--audio-format', format,
-      '--audio-quality', '0',
+      '--audio-quality', audioQuality,
       '-o', tmpFilePath,
       url
     ]);
@@ -86,6 +94,18 @@ export class YoutubeAudioSource implements AudioSource {
         return 'audio/mp4';
       default:
         return 'application/octet-stream';
+    }
+  }
+
+  private mapQuality(quality: DownloadQuality): string {
+    switch (quality) {
+      case 'low':
+        return '5';
+      case 'medium':
+        return '3';
+      case 'high':
+      default:
+        return '0';
     }
   }
 }

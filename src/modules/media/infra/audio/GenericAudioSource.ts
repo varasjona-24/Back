@@ -2,7 +2,11 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
-import type { AudioSource, ResolvedMediaStream } from '../../domain/usecases/types.js';
+import type {
+  AudioSource,
+  ResolvedMediaStream,
+  DownloadQuality,
+} from '../../domain/usecases/types.js';
 
 export class GenericAudioSource implements AudioSource {
 
@@ -10,7 +14,12 @@ export class GenericAudioSource implements AudioSource {
     return true;
   }
 
-  async getAudioStream(url: string): Promise<ResolvedMediaStream> {
+  async getAudioStream(
+    url: string,
+    _range?: string,
+    _format?: unknown,
+    _quality?: DownloadQuality
+  ): Promise<ResolvedMediaStream> {
     const tmpDir = path.join(process.cwd(), 'tmp');
     await fs.promises.mkdir(tmpDir, { recursive: true });
 

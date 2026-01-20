@@ -37,6 +37,36 @@ export class JsonMediaLibrary implements MediaLibrary {
     return this.items.get(id);
   }
 
+  updateSource(
+    mediaId: string,
+    source: NormalizedMediaInfo['source'],
+    sourceId?: string
+  ): void {
+    const media = this.items.get(mediaId);
+
+    if (!media) {
+      throw new Error(`Media ${mediaId} not found`);
+    }
+
+    let dirty = false;
+
+    if (media.source === 'generic' && source !== 'generic') {
+      media.source = source;
+      dirty = true;
+    }
+
+    if (
+      sourceId &&
+      sourceId.trim().length > 0 &&
+      (media.sourceId ?? '').trim().length === 0
+    ) {
+      media.sourceId = sourceId;
+      dirty = true;
+    }
+
+    if (dirty) this.save();
+  }
+
   /* ===============================
    * VARIANTES
    * =============================== */
@@ -57,16 +87,16 @@ export class JsonMediaLibrary implements MediaLibrary {
   getVariants(mediaId: string): MediaVariant[] {
     return this.items.get(mediaId)?.variants ?? [];
   }
-getVariant(mediaId: string, kind: string, format: string) {
-  return this.items
-    .get(mediaId)
-    ?.variants
-    ?.find(v => v.kind === kind && v.format === format);
-}
+  getVariant(mediaId: string, kind: string, format: string) {
+    return this.items
+      .get(mediaId)
+      ?.variants
+      ?.find(v => v.kind === kind && v.format === format);
+  }
 
-hasVariant(mediaId: string, kind: string, format: string): boolean {
-  return Boolean(this.getVariant(mediaId, kind, format));
-}
+  hasVariant(mediaId: string, kind: string, format: string): boolean {
+    return Boolean(this.getVariant(mediaId, kind, format));
+  }
   /* ===============================
    * CONSULTAS (USADAS POR CONTROLLER)
    * =============================== */
@@ -130,42 +160,42 @@ hasVariant(mediaId: string, kind: string, format: string): boolean {
    * =============================== */
 
   private load() {
-  try {
-    if (!fs.existsSync(this.filePath)) {
-      fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+    try {
+      if (!fs.existsSync(this.filePath)) {
+        fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
+        fs.writeFileSync(this.filePath, '[]', 'utf-8');
+      }
+
+      const raw = fs.readFileSync(this.filePath, 'utf-8').trim();
+
+      if (!raw) {
+        this.items.clear();
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+
+      if (!Array.isArray(parsed)) {
+        throw new Error('media-library.json must contain an array');
+      }
+
+      for (const item of parsed) {
+        this.items.set(item.id, {
+          ...item,
+          variants: item.variants ?? []
+        });
+      }
+
+    } catch (err) {
+      console.error('⚠️ Failed to load media library, resetting file');
+      console.error(err);
+
+      // Estado seguro
+      this.items.clear();
+
       fs.writeFileSync(this.filePath, '[]', 'utf-8');
     }
-
-    const raw = fs.readFileSync(this.filePath, 'utf-8').trim();
-
-    if (!raw) {
-      this.items.clear();
-      return;
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      throw new Error('media-library.json must contain an array');
-    }
-
-    for (const item of parsed) {
-      this.items.set(item.id, {
-        ...item,
-        variants: item.variants ?? []
-      });
-    }
-
-  } catch (err) {
-    console.error('⚠️ Failed to load media library, resetting file');
-    console.error(err);
-
-    // Estado seguro
-    this.items.clear();
-
-    fs.writeFileSync(this.filePath, '[]', 'utf-8');
   }
-}
   private save() {
     fs.writeFileSync(
       this.filePath,

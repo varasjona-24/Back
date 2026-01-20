@@ -4,7 +4,8 @@ import path from 'path';
 
 import type {
   VideoSource,
-  ResolvedMediaStream
+  ResolvedMediaStream,
+  DownloadQuality
 } from '../../domain/usecases/types.js';
 
 function runMegadl(
@@ -58,7 +59,11 @@ export class MegaVideoSource implements VideoSource {
     return u.includes('mega.nz/') || u.includes('mega.co.nz/');
   }
 
-  async getVideoStream(url: string): Promise<ResolvedMediaStream> {
+  async getVideoStream(
+    url: string,
+    _range?: string,
+    _quality?: DownloadQuality
+  ): Promise<ResolvedMediaStream> {
     // 📁 tmp único por descarga
     const tmpDir = path.resolve(
       'tmp',

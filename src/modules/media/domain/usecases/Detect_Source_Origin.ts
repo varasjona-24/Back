@@ -20,6 +20,7 @@ export function detectSourceOrigin(url: string): SourceOrigin {
   if (u.includes('threads.net')) return 'threads';
   if (u.includes('vk.com')) return 'vk';
   if (u.includes('4chan.org')) return '4chan';
+  if (u.includes('mega.nz') || u.includes('mega.co.nz')) return 'mega';
 
   return 'generic';
 }
