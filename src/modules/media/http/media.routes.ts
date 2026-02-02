@@ -24,6 +24,11 @@ router.get('/library/artists', (req, res) =>
   controller.libraryBYArtist(req, res)
 );
 
+// 🎧 Biblioteca agrupada por artista
+router.get('/library/artists/grouped', (req, res) =>
+  controller.libraryByArtist(req, res)
+);
+
 // ⬇️ Descargar media
 router.post('/download', (req, res) =>
   controller.download(req, res)

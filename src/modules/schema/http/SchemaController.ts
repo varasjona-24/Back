@@ -6,7 +6,16 @@ import { fileURLToPath } from 'url';
 
 export class SchemaController {
 
+
+  private isSchemaPublic() {
+    return process.env.NODE_ENV !== 'production' || process.env.EXPOSE_SCHEMA === 'true';
+  }
+
   current(req: Request, res: Response) {
+    if (!this.isSchemaPublic()) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     return res.json({
       version: 1,
       name: 'library'
@@ -14,6 +23,10 @@ export class SchemaController {
   }
 
   sql(req: Request, res: Response) {
+    if (!this.isSchemaPublic()) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const schemaPath = path.resolve(

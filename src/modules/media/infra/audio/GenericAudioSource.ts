@@ -30,14 +30,27 @@ export class GenericAudioSource implements AudioSource {
 
     return new Promise((resolve, reject) => {
       const child = spawn('yt-dlp', [
+        '--no-playlist',
         '-f', 'ba',
         '-o', tmpFilePath,
         url
       ]);
 
+      let stderr = '';
+      child.stderr?.on('data', chunk => {
+        stderr += chunk.toString();
+      });
+
       child.on('close', code => {
         if (code !== 0) {
-          return reject(new Error('yt-dlp failed to download audio'));
+          const detail = stderr.trim();
+          return reject(
+            new Error(
+              detail
+                ? `yt-dlp failed to download audio: ${detail}`
+                : 'yt-dlp failed to download audio'
+            )
+          );
         }
 
         resolve({

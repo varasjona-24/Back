@@ -37,14 +37,29 @@ export class YoutubeAudioSource implements AudioSource {
   return new Promise((resolve, reject) => {
     const child = spawn('yt-dlp', [
       '-x',
+      '--no-playlist',
       '--audio-format', format,
       '--audio-quality', audioQuality,
       '-o', tmpFilePath,
       url
     ]);
 
+    let stderr = '';
+    child.stderr?.on('data', chunk => {
+      stderr += chunk.toString();
+    });
+
     child.on('close', code => {
-      if (code !== 0) return reject(new Error('yt-dlp failed to download audio'));
+      if (code !== 0) {
+        const detail = stderr.trim();
+        return reject(
+          new Error(
+            detail
+              ? `yt-dlp failed to download audio: ${detail}`
+              : 'yt-dlp failed to download audio'
+          )
+        );
+      }
 
       resolve({
         stream: fs.createReadStream(tmpFilePath),
