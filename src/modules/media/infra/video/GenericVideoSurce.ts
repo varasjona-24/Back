@@ -7,6 +7,7 @@ import type {
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
+import { getYtDlpPath } from '../ytDlp.js';
 
 function ensureDir(pth: string) {
   return fs.promises.mkdir(pth, { recursive: true });
@@ -67,6 +68,7 @@ export class GenericVideoSource implements VideoSource {
 
     // 1) Intentar con yt-dlp
     try {
+      const ytDlpPath = await getYtDlpPath();
       const format = this.buildFormat(quality);
       const ytdlpArgs = [
         '--no-playlist',
@@ -76,7 +78,7 @@ export class GenericVideoSource implements VideoSource {
         url,
       ];
 
-      const { code, stderr } = await run('yt-dlp', ytdlpArgs, { timeoutMs: 1000 * 60 * 8 });
+      const { code, stderr } = await run(ytDlpPath, ytdlpArgs, { timeoutMs: 1000 * 60 * 8 });
 
       if (code === 0 && fs.existsSync(tmpFile)) {
         return {

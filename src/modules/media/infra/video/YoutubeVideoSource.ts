@@ -6,6 +6,7 @@ import {
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
+import { getYtDlpPath } from '../ytDlp.js';
 
 export class YoutubeVideoSource implements VideoSource {
 
@@ -30,7 +31,8 @@ export class YoutubeVideoSource implements VideoSource {
     const maxHeight = this.mapQuality(quality);
     const format = `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}]+bestaudio[ext=m4a]/best[ext=mp4]`;
 
-    const child = spawn('yt-dlp', [
+    const ytDlpPath = await getYtDlpPath();
+    const child = spawn(ytDlpPath, [
       '-f', format,
       '--merge-output-format', 'mp4',
       '--no-playlist',
