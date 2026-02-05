@@ -26,6 +26,9 @@ import {
 import { mediaLibrary } from '../domain/library/index.js';
 
 export class MediaController {
+  private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
+  private static cleanupTimers = new Map<string, NodeJS.Timeout>();
+
   /* ======================================================
    * STREAM AUDIO (YA EXISTE – NO SE TOCA)
    * ====================================================== */
@@ -203,7 +206,8 @@ export class MediaController {
           new GenericVideoSource(), // fallback
         ],
         mediaLibrary,
-        process.env.MEDIA_PATH || 'media'
+        process.env.MEDIA_PATH || 'media',
+        MediaController.VARIANT_TTL_MS
       );
 
       const resolvedFormat: AudioFormat | VideoFormat =
@@ -248,7 +252,13 @@ export class MediaController {
     // ✅ Usa el path guardado tal cual (ya lo tienes en media-library.json)
     const filePath = path.resolve(variant.path);
 
+    if (variant.expiresAt && Date.now() >= variant.expiresAt) {
+      this.cleanupVariant(mediaId, kind, format, filePath);
+      return res.status(404).json({ error: 'File expired' });
+    }
+
     if (!fs.existsSync(filePath)) {
+      mediaLibrary.removeVariant(mediaId, kind, format);
       return res.status(404).json({ error: 'File not found on disk' });
     }
 
@@ -276,6 +286,7 @@ export class MediaController {
 
     if (!range) {
       // 200 completo
+      this.scheduleCleanup(mediaId, kind, format, filePath, variant.expiresAt);
       return fs.createReadStream(filePath).pipe(res);
     }
 
@@ -292,6 +303,39 @@ export class MediaController {
     res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
     res.setHeader('Content-Length', String(end - start + 1));
 
+    this.scheduleCleanup(mediaId, kind, format, filePath, variant.expiresAt);
     return fs.createReadStream(filePath, { start, end }).pipe(res);
+  }
+
+  private scheduleCleanup(
+    mediaId: string,
+    kind: string,
+    format: string,
+    filePath: string,
+    expiresAt?: number
+  ) {
+    if (!expiresAt) return;
+
+    const key = `${mediaId}:${kind}:${format}`;
+    if (MediaController.cleanupTimers.has(key)) return;
+
+    const delay = Math.max(0, expiresAt - Date.now());
+
+    const timer = setTimeout(() => {
+      MediaController.cleanupTimers.delete(key);
+      this.cleanupVariant(mediaId, kind, format, filePath);
+    }, delay);
+
+    MediaController.cleanupTimers.set(key, timer);
+  }
+
+  private cleanupVariant(
+    mediaId: string,
+    kind: string,
+    format: string,
+    filePath: string
+  ) {
+    fs.promises.unlink(filePath).catch(() => {});
+    mediaLibrary.removeVariant(mediaId, kind, format);
   }
 }

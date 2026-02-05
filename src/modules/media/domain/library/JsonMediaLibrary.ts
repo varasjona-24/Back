@@ -94,6 +94,23 @@ export class JsonMediaLibrary implements MediaLibrary {
       ?.find(v => v.kind === kind && v.format === format);
   }
 
+  removeVariant(mediaId: string, kind: string, format: string): void {
+    const media = this.items.get(mediaId);
+    if (!media?.variants?.length) return;
+
+    const nextVariants = media.variants.filter(
+      v => !(v.kind === kind && v.format === format)
+    );
+
+    if (nextVariants.length === 0) {
+      this.items.delete(mediaId);
+    } else {
+      media.variants = nextVariants;
+    }
+
+    this.save();
+  }
+
   hasVariant(mediaId: string, kind: string, format: string): boolean {
     return Boolean(this.getVariant(mediaId, kind, format));
   }

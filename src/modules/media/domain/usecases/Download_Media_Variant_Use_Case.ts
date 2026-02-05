@@ -30,7 +30,9 @@ export class DownloadMediaVariantUseCase {
     private readonly videoSources: VideoSource[],
     private readonly mediaLibrary: MediaLibrary,
     /** storage root, ej: /Back/storage */
-    private readonly basePath: string
+    private readonly basePath: string,
+    /** optional TTL for temporary variants */
+    private readonly variantTtlMs: number = 0
   ) {}
 
   async execute(input: DownloadMediaVariantInput) {
@@ -98,7 +100,8 @@ export class DownloadMediaVariantUseCase {
       kind,
       format,
       path: filePath,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      expiresAt: this.variantTtlMs > 0 ? Date.now() + this.variantTtlMs : undefined
     });
 
     this.mediaLibrary.updateSource(mediaId, origin, sourceId);

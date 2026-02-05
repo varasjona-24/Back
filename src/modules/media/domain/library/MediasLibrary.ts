@@ -44,6 +44,12 @@ export interface MediaLibrary {
     format: string
   ): MediaVariant | undefined;
 
+  removeVariant(
+    mediaId: string,
+    kind: string,
+    format: string
+  ): void;
+
   hasVariant(
     mediaId: string,
     kind: string,
