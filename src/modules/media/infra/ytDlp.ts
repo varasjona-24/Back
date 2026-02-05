@@ -36,20 +36,25 @@ export async function getYtDlpPath(): Promise<string> {
   if (cachedPath) return cachedPath;
   if (pending) return pending;
 
-  const binDir = path.join(process.cwd(), 'tmp');
+  const binDir = path.join(process.cwd(), 'bin');
   const binPath = path.join(binDir, 'yt-dlp');
 
-  pending = (async () => {
-    await fs.promises.mkdir(binDir, { recursive: true });
-
-    if (!fs.existsSync(binPath)) {
-      const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
-      await downloadFile(url, binPath);
-      await fs.promises.chmod(binPath, 0o755);
-    }
-
+  if (fs.existsSync(binPath)) {
     cachedPath = binPath;
     return binPath;
+  }
+
+  pending = (async () => {
+    const tmpDir = path.join(process.cwd(), 'tmp');
+    const tmpPath = path.join(tmpDir, 'yt-dlp');
+    await fs.promises.mkdir(tmpDir, { recursive: true });
+
+    const url = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+    await downloadFile(url, tmpPath);
+    await fs.promises.chmod(tmpPath, 0o755);
+
+    cachedPath = tmpPath;
+    return tmpPath;
   })();
 
   return pending;

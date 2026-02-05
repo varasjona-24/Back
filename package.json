@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "node src/scripts/download-ytdlp.mjs",
     "build": "tsc",
     "start": "node dist/server.js",
       "dev": "node --loader ts-node/esm src/server.ts",
