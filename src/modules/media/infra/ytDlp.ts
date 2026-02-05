@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import YTDlpWrap from 'yt-dlp-wrap';
 
 let cachedPath: string | null = null;
 let pending: Promise<string> | null = null;
@@ -20,6 +19,11 @@ export async function getYtDlpPath(): Promise<string> {
     await fs.promises.mkdir(binDir, { recursive: true });
 
     if (!fs.existsSync(binPath)) {
+      const mod = await import('yt-dlp-wrap');
+      const YTDlpWrap = mod.default as {
+        downloadFromGithub: (filePath: string, version?: string, platform?: string) => Promise<void>;
+      };
+
       await YTDlpWrap.downloadFromGithub(binPath);
     }
 
