@@ -19,10 +19,12 @@ export async function getYtDlpPath(): Promise<string> {
     await fs.promises.mkdir(binDir, { recursive: true });
 
     if (!fs.existsSync(binPath)) {
-      const mod = await import('yt-dlp-wrap');
-      const YTDlpWrap = mod.default as {
-        downloadFromGithub: (filePath: string, version?: string, platform?: string) => Promise<void>;
-      };
+      const mod: any = await import('yt-dlp-wrap');
+      const YTDlpWrap = mod?.default ?? mod;
+
+      if (!YTDlpWrap?.downloadFromGithub) {
+        throw new Error('yt-dlp-wrap missing downloadFromGithub');
+      }
 
       await YTDlpWrap.downloadFromGithub(binPath);
     }
