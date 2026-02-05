@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { getYtDlpPath } from '../ytDlp.js';
 
 export interface YoutubeResolvedInfo {
   title: string;
@@ -9,10 +10,11 @@ export interface YoutubeResolvedInfo {
 
 export class YoutubeInfoSource {
 
-  resolve(url: string): Promise<YoutubeResolvedInfo> {
-    return new Promise((resolve, reject) => {
+  async resolve(url: string): Promise<YoutubeResolvedInfo> {
+    const ytDlpPath = await getYtDlpPath();
 
-      const child = spawn('yt-dlp', [
+    return new Promise((resolve, reject) => {
+      const child = spawn(ytDlpPath, [
         '--dump-json',
         '--no-playlist',
         url
