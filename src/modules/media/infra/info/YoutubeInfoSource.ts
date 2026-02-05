@@ -21,13 +21,33 @@ export class YoutubeInfoSource {
       ]);
 
       let data = '';
+      let stderr = '';
 
       child.stdout.on('data', chunk => {
         data += chunk.toString();
       });
 
-      child.on('close', () => {
+      child.stderr?.on('data', chunk => {
+        stderr += chunk.toString();
+      });
+
+      child.on('close', code => {
         try {
+          if (code !== 0) {
+            const detail = stderr.trim();
+            return reject(
+              new Error(
+                detail
+                  ? `yt-dlp failed to resolve info: ${detail}`
+                  : 'yt-dlp failed to resolve info'
+              )
+            );
+          }
+
+          if (!data.trim()) {
+            return reject(new Error('yt-dlp returned empty info'));
+          }
+
           const json = JSON.parse(data);
 
           resolve({
