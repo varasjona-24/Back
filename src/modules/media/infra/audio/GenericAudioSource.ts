@@ -7,7 +7,7 @@ import type {
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
-import { getYtDlpPath } from '../ytDlp.js';
+import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
 
 export class GenericAudioSource implements AudioSource {
 
@@ -29,9 +29,11 @@ export class GenericAudioSource implements AudioSource {
       `${Date.now()}-generic-audio.tmp`
     );
     const ytDlpPath = await getYtDlpPath();
+    const extraArgs = await getYtDlpExtraArgs();
 
     return new Promise((resolve, reject) => {
       const child = spawn(ytDlpPath, [
+        ...extraArgs,
         '--no-playlist',
         '-f', 'ba',
         '-o', tmpFilePath,

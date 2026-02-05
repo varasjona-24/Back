@@ -9,7 +9,7 @@ import {
   ResolvedMediaStream,
   DownloadQuality
 } from '../../domain/usecases/types.js';
-import { getYtDlpPath } from '../ytDlp.js';
+import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
 
 export class YoutubeAudioSource implements AudioSource {
 
@@ -35,9 +35,11 @@ export class YoutubeAudioSource implements AudioSource {
 
   const audioQuality = this.mapQuality(quality);
   const ytDlpPath = await getYtDlpPath();
+  const extraArgs = await getYtDlpExtraArgs();
 
   return new Promise((resolve, reject) => {
     const child = spawn(ytDlpPath, [
+      ...extraArgs,
       '-x',
       '--no-playlist',
       '--audio-format', format,

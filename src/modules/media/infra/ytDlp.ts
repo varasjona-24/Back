@@ -4,6 +4,7 @@ import https from 'https';
 
 let cachedPath: string | null = null;
 let pending: Promise<string> | null = null;
+let cachedCookiesPath: string | null = null;
 
 function downloadFile(url: string, filePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -58,4 +59,24 @@ export async function getYtDlpPath(): Promise<string> {
   })();
 
   return pending;
+}
+
+export async function getYtDlpExtraArgs(): Promise<string[]> {
+  const args: string[] = ['--js-runtimes', 'node'];
+
+  const cookiesB64 = process.env.YTDLP_COOKIES_BASE64?.trim();
+  if (!cookiesB64) return args;
+
+  if (!cachedCookiesPath) {
+    const tmpDir = path.join(process.cwd(), 'tmp');
+    const cookiesPath = path.join(tmpDir, 'yt-cookies.txt');
+    await fs.promises.mkdir(tmpDir, { recursive: true });
+
+    const decoded = Buffer.from(cookiesB64, 'base64').toString('utf-8');
+    await fs.promises.writeFile(cookiesPath, decoded, 'utf-8');
+    cachedCookiesPath = cookiesPath;
+  }
+
+  args.push('--cookies', cachedCookiesPath);
+  return args;
 }

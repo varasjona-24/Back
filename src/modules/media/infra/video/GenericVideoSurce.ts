@@ -7,7 +7,7 @@ import type {
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
-import { getYtDlpPath } from '../ytDlp.js';
+import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
 
 function ensureDir(pth: string) {
   return fs.promises.mkdir(pth, { recursive: true });
@@ -69,8 +69,10 @@ export class GenericVideoSource implements VideoSource {
     // 1) Intentar con yt-dlp
     try {
       const ytDlpPath = await getYtDlpPath();
+      const extraArgs = await getYtDlpExtraArgs();
       const format = this.buildFormat(quality);
       const ytdlpArgs = [
+        ...extraArgs,
         '--no-playlist',
         '-f', format,
         '--merge-output-format', 'mp4',
