@@ -95,7 +95,9 @@ export async function getYtDlpExtraArgs(): Promise<string[]> {
 
   if (!cachedCookiesPath) {
     const decoded = Buffer.from(cookiesB64, 'base64').toString('utf-8');
-    await storeYtDlpCookies(decoded);
+    const savedPath = await storeYtDlpCookies(decoded);
+    args.push('--cookies', savedPath);
+    return args;
   }
 
   args.push('--cookies', cachedCookiesPath);
