@@ -34,6 +34,7 @@ export class YoutubeAudioSource implements AudioSource {
   const tmpFilePath = path.join(tmpDir, `${Date.now()}-generic-audio.${format}`);
 
   const audioQuality = this.mapQuality(quality);
+  const audioBitrate = this.mapBitrate(quality);
   const ytDlpPath = await getYtDlpPath();
   const extraArgs = await getYtDlpExtraArgs();
 
@@ -44,6 +45,7 @@ export class YoutubeAudioSource implements AudioSource {
       '--no-playlist',
       '--audio-format', format,
       '--audio-quality', audioQuality,
+      '--postprocessor-args', `ffmpeg:-b:a ${audioBitrate}`,
       '-o', tmpFilePath,
       url
     ]);
@@ -125,6 +127,18 @@ export class YoutubeAudioSource implements AudioSource {
       case 'high':
       default:
         return '0';
+    }
+  }
+
+  private mapBitrate(quality: DownloadQuality): string {
+    switch (quality) {
+      case 'low':
+        return '128k';
+      case 'medium':
+        return '192k';
+      case 'high':
+      default:
+        return '320k';
     }
   }
 }
