@@ -39,4 +39,9 @@ router.get('/file/:mediaId/:kind/:format', (req, res) =>
   controller.file(req, res)
 );
 
+// 🔐 ADMIN: actualizar cookies de yt-dlp
+router.post('/admin/ytdlp-cookies', (req, res) =>
+  controller.updateYtDlpCookies(req, res)
+);
+
 export default router;

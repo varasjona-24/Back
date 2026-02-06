@@ -11,6 +11,7 @@ import { YoutubeVideoSource } from '../infra/video/YoutubeVideoSource.js';
 
 import { GenericVideoSource } from '../infra/video/GenericVideoSurce.js';
 import { GenericAudioSource } from '../infra/audio/GenericAudioSource.js';
+import { storeYtDlpCookies } from '../infra/ytDlp.js';
 
 // ✅ NEW: MEGA
 import { MegaVideoSource } from '../infra/video/MegaVideoSources.js';
@@ -28,6 +29,31 @@ import { mediaLibrary } from '../domain/library/index.js';
 export class MediaController {
   private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
   private static cleanupTimers = new Map<string, NodeJS.Timeout>();
+
+  private getAdminToken(req: Request): string | null {
+    const headerToken = req.header('x-admin-token');
+    if (headerToken) return headerToken.trim();
+
+    const auth = req.header('authorization');
+    if (auth?.toLowerCase().startsWith('bearer ')) {
+      return auth.slice(7).trim();
+    }
+
+    const queryToken = req.query.token;
+    if (typeof queryToken === 'string' && queryToken.trim()) {
+      return queryToken.trim();
+    }
+
+    return null;
+  }
+
+  private isValidCookiesFile(content: string): boolean {
+    return (
+      content.includes('Netscape HTTP Cookie File') ||
+      content.includes('\t.youtube.com') ||
+      content.includes('youtube.com')
+    );
+  }
 
   /* ======================================================
    * STREAM AUDIO (YA EXISTE – NO SE TOCA)
@@ -120,6 +146,52 @@ export class MediaController {
 
   async libraryByArtist(req: Request, res: Response) {
     res.json(mediaLibrary.getGroupedByArtist());
+  }
+
+  /* ======================================================
+   * ADMIN: UPDATE YT-DLP COOKIES
+   * ====================================================== */
+
+  async updateYtDlpCookies(req: Request, res: Response) {
+    const expectedToken = process.env.YTDLP_ADMIN_TOKEN?.trim();
+    if (!expectedToken) {
+      return res.status(500).json({ error: 'YTDLP_ADMIN_TOKEN not configured' });
+    }
+
+    const providedToken = this.getAdminToken(req);
+    if (!providedToken || providedToken !== expectedToken) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { cookiesBase64, cookiesText, cookies } = req.body ?? {};
+    let content = '';
+
+    if (typeof cookiesText === 'string' && cookiesText.trim()) {
+      content = cookiesText.trim();
+    } else if (typeof cookies === 'string' && cookies.trim()) {
+      content = cookies.trim();
+    } else if (typeof cookiesBase64 === 'string' && cookiesBase64.trim()) {
+      try {
+        content = Buffer.from(cookiesBase64.trim(), 'base64').toString('utf-8');
+      } catch {
+        return res.status(400).json({ error: 'Invalid base64 cookies' });
+      }
+    }
+
+    if (!content) {
+      return res.status(400).json({
+        error: 'Send cookiesBase64 or cookiesText in body',
+      });
+    }
+
+    if (!this.isValidCookiesFile(content)) {
+      return res.status(400).json({
+        error: 'Cookies file does not look like Netscape format',
+      });
+    }
+
+    const savedPath = await storeYtDlpCookies(content);
+    return res.json({ ok: true, path: savedPath });
   }
 
   /* ======================================================

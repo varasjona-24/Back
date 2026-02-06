@@ -6,6 +6,20 @@ let cachedPath: string | null = null;
 let pending: Promise<string> | null = null;
 let cachedCookiesPath: string | null = null;
 
+function getCookiesPath(): string {
+  const envPath = process.env.YTDLP_COOKIES_PATH?.trim();
+  if (envPath) return envPath;
+  return path.join(process.cwd(), 'tmp', 'yt-cookies.txt');
+}
+
+export async function storeYtDlpCookies(content: string): Promise<string> {
+  const cookiesPath = getCookiesPath();
+  await fs.promises.mkdir(path.dirname(cookiesPath), { recursive: true });
+  await fs.promises.writeFile(cookiesPath, content, 'utf-8');
+  cachedCookiesPath = cookiesPath;
+  return cookiesPath;
+}
+
 function downloadFile(url: string, filePath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
@@ -64,17 +78,24 @@ export async function getYtDlpPath(): Promise<string> {
 export async function getYtDlpExtraArgs(): Promise<string[]> {
   const args: string[] = ['--js-runtimes', 'node'];
 
+  const cookiesPath = getCookiesPath();
+  if (fs.existsSync(cookiesPath)) {
+    cachedCookiesPath = cookiesPath;
+    args.push('--cookies', cookiesPath);
+    return args;
+  }
+
+  if (cachedCookiesPath && fs.existsSync(cachedCookiesPath)) {
+    args.push('--cookies', cachedCookiesPath);
+    return args;
+  }
+
   const cookiesB64 = process.env.YTDLP_COOKIES_BASE64?.trim();
   if (!cookiesB64) return args;
 
   if (!cachedCookiesPath) {
-    const tmpDir = path.join(process.cwd(), 'tmp');
-    const cookiesPath = path.join(tmpDir, 'yt-cookies.txt');
-    await fs.promises.mkdir(tmpDir, { recursive: true });
-
     const decoded = Buffer.from(cookiesB64, 'base64').toString('utf-8');
-    await fs.promises.writeFile(cookiesPath, decoded, 'utf-8');
-    cachedCookiesPath = cookiesPath;
+    await storeYtDlpCookies(decoded);
   }
 
   args.push('--cookies', cachedCookiesPath);

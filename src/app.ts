@@ -7,7 +7,7 @@ app.use('/api/v1/media/stream', (_req, _res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use('/api/v1', routes);
 
 export default app;
