@@ -7,6 +7,7 @@ import { ResolveMediaInfo } from '../domain/usecases/ResolveMediaInfo.js';
 import { DownloadMediaVariantUseCase } from '../domain/usecases/Download_Media_Variant_Use_Case.js';
 
 import { YoutubeAudioSource } from '../infra/audio/YoutubeAudioSource.js';
+import { MegaAudioSource } from '../infra/audio/MegaAudioSource.js';
 import { YoutubeVideoSource } from '../infra/video/YoutubeVideoSource.js';
 
 import { GenericVideoSource } from '../infra/video/GenericVideoSurce.js';
@@ -269,8 +270,8 @@ export class MediaController {
       const downloadUseCase = new DownloadMediaVariantUseCase(
         [
           new YoutubeAudioSource(),
+          new MegaAudioSource(), // ✅ MEGA audio
           new GenericAudioSource(), // fallback
-          // si luego agregas MegaAudioSource, ponlo aquí antes del GenericAudioSource
         ],
         [
           new YoutubeVideoSource(),
