@@ -20,6 +20,19 @@ type MegaModuleLike = {
   };
 };
 
+const VIDEO_MIME_BY_EXT: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
+  '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo',
+  '.ts': 'video/mp2t',
+  '.mpeg': 'video/mpeg',
+  '.mpg': 'video/mpeg',
+  '.3gp': 'video/3gpp',
+};
+
 function unlinkQuiet(filePath: string) {
   fs.promises.unlink(filePath).catch(() => {});
 }
@@ -53,9 +66,9 @@ function buildTmpFilePath(tmpDir: string, rawName?: string): string {
   return path.join(tmpDir, `${prefix}-${safeName}`);
 }
 
-function looksLikeMp4(filePath: string): boolean {
+function resolveVideoMime(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  return ext === '.mp4' || ext === '.m4v';
+  return VIDEO_MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
 export class MegaVideoSource implements VideoSource {
@@ -84,16 +97,9 @@ export class MegaVideoSource implements VideoSource {
       throw new Error('Downloaded MEGA video file is empty');
     }
 
-    if (!looksLikeMp4(tmpFilePath)) {
-      unlinkQuiet(tmpFilePath);
-      throw new Error(
-        'MEGA video must be .mp4/.m4v when running without ffmpeg'
-      );
-    }
-
     return {
       stream: fs.createReadStream(tmpFilePath),
-      mimeType: 'video/mp4',
+      mimeType: resolveVideoMime(tmpFilePath),
       tmpFilePath,
     };
   }
