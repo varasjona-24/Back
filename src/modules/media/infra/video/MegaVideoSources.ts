@@ -7,6 +7,9 @@ import type {
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
+import { getMegaApi } from '../mega/megaAuth.js';
+
+type MegaApiLike = object;
 
 type MegaFileLike = {
   name?: string;
@@ -16,7 +19,12 @@ type MegaFileLike = {
 
 type MegaModuleLike = {
   File: {
-    fromURL: (url: string) => MegaFileLike;
+    fromURL: (
+      url: string,
+      extraOpt?: {
+        api?: MegaApiLike;
+      }
+    ) => MegaFileLike;
   };
 };
 
@@ -44,7 +52,8 @@ async function loadMegaFile(url: string): Promise<MegaFileLike> {
     throw new Error('megajs is not available');
   }
 
-  const file = mega.File.fromURL(url);
+  const api = await getMegaApi();
+  const file = mega.File.fromURL(url, api ? { api } : undefined);
 
   await new Promise<void>((resolve, reject) => {
     file.loadAttributes((error?: Error | null) => {
