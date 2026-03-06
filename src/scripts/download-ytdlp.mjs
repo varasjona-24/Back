@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import { spawn } from 'child_process';
 
 const binDir = path.join(process.cwd(), 'bin');
 const binPath = path.join(binDir, 'yt-dlp');
@@ -23,24 +24,51 @@ function downloadFile(fileUrl, filePath) {
 
       const file = fs.createWriteStream(filePath, { mode: 0o755 });
       res.pipe(file);
+
       file.on('finish', () => file.close(() => resolve()));
       file.on('error', reject);
     }).on('error', reject);
   });
 }
 
-async function main() {
-  await fs.promises.mkdir(binDir, { recursive: true });
+function printVersion() {
+  return new Promise((resolve) => {
+    const proc = spawn(binPath, ['--version']);
 
-  if (fs.existsSync(binPath)) {
-    return;
-  }
+    proc.stdout.on('data', (data) => {
+      console.log(`[yt-dlp] version: ${data.toString().trim()}`);
+    });
 
-  await downloadFile(url, binPath);
-  await fs.promises.chmod(binPath, 0o755);
+    proc.stderr.on('data', (data) => {
+      console.error(`[yt-dlp] stderr: ${data.toString()}`);
+    });
+
+    proc.on('close', () => resolve());
+  });
 }
 
-main().catch((err) => {
-  console.error('[download-ytdlp] failed', err);
-  process.exit(1);
-});
+async function main() {
+  try {
+    await fs.promises.mkdir(binDir, { recursive: true });
+
+    if (fs.existsSync(binPath)) {
+      console.log('[yt-dlp] Removing old binary...');
+      await fs.promises.unlink(binPath);
+    }
+
+    console.log('[yt-dlp] Downloading latest version...');
+    await downloadFile(url, binPath);
+
+    await fs.promises.chmod(binPath, 0o755);
+
+    console.log('[yt-dlp] Download complete');
+
+    await printVersion();
+
+  } catch (err) {
+    console.error('[download-ytdlp] failed', err);
+    process.exit(1);
+  }
+}
+
+main();
