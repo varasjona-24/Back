@@ -32,3 +32,17 @@ Karaoke separation quality
   - `KARAOKE_INSTRUMENTAL_TTL_MS=600000` (default 10 min; auto-elimina el archivo instrumental generado en backend)
   - Demucs uses a protected timeout floor of 30 min to avoid cutting long CPU separations mid-progress.
   - `KARAOKE_SEPARATION_CMD=...` (highest priority custom command; overrides built-in Demucs command)
+
+Render deployment notes
+
+- Added:
+  - `render-build.sh` (build Node app and optional Demucs install)
+  - `render-start.sh` (auto-configures local Demucs command if venv exists)
+  - `render.yaml` (blueprint defaults)
+- Default behavior is safe fallback mode (no Demucs install):
+  - `INSTALL_DEMUCS=0`
+  - `KARAOKE_DEMUCS_ENABLED=0`
+- To enable Demucs on Render:
+  1. set `INSTALL_DEMUCS=1`
+  2. set `KARAOKE_DEMUCS_ENABLED=1`
+  3. redeploy (build can take significantly longer)

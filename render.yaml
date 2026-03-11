@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: back-1
+    env: node
+    plan: free
+    buildCommand: ./render-build.sh
+    startCommand: ./render-start.sh
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_PRODUCTION
+        value: "false"
+      - key: MEDIA_PATH
+        value: media
+      - key: KARAOKE_INSTRUMENTAL_TTL_MS
+        value: "600000"
+      - key: KARAOKE_SEPARATION_TIMEOUT_MS
+        value: "2700000"
+      - key: KARAOKE_SEPARATION_IDLE_TIMEOUT_MS
+        value: "300000"
+      - key: KARAOKE_SESSIONS_TTL_MS
+        value: "86400000"
+      - key: KARAOKE_SESSIONS_MAX
+        value: "120"
+      - key: KARAOKE_DEMUCS_STRICT
+        value: "0"
+      - key: KARAOKE_DEMUCS_ENABLED
+        value: "0"
+      - key: KARAOKE_DEMUCS_MODEL
+        value: htdemucs_ft
+      - key: INSTALL_DEMUCS
+        value: "0"
