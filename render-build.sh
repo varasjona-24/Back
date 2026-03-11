@@ -23,9 +23,9 @@ python3 -m venv .venv-demucs
 source .venv-demucs/bin/activate
 
 python -m pip install -U pip setuptools wheel
-python -m pip install --index-url https://download.pytorch.org/whl/cpu torch torchaudio
+python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2" "torchaudio==2.2.2"
 # Keep NumPy 1.x for broad compatibility with torch/demucs runtime wheels.
 python -m pip install "numpy<2" -U
-python -m pip install -U demucs
+python -m pip install -U "demucs==4.0.1"
 
 echo "[render-build] Demucs install completed"
