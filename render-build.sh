@@ -4,7 +4,10 @@ set -eu
 echo "[render-build] starting build"
 
 echo "[render-build] installing node dependencies"
-npm ci
+if ! npm ci --include=dev; then
+  echo "[render-build] npm ci failed, retrying with npm install"
+  npm install --include=dev
+fi
 
 echo "[render-build] building typescript"
 npm run build
