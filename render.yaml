@@ -1,8 +1,7 @@
 services:
   - type: web
     name: back-1
-    env: node
-    plan: free
+    runtime: node
     buildCommand: ./render-build.sh
     startCommand: ./render-start.sh
     envVars:
@@ -27,6 +26,6 @@ services:
       - key: KARAOKE_DEMUCS_ENABLED
         value: "0"
       - key: KARAOKE_DEMUCS_MODEL
-        value: htdemucs_ft
+        value: htdemucs
       - key: INSTALL_DEMUCS
         value: "0"
