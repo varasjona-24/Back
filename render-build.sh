@@ -35,24 +35,32 @@ if (major, minor) > (3, 11):
 print(f"[render-build] Python version OK: {major}.{minor}")
 PY
 
-echo "[render-build] creating local virtual environment for Demucs"
-rm -rf .venv-demucs
-python3 -m venv .venv-demucs
-. .venv-demucs/bin/activate
+DEMUCS_PYTHON="python3"
+if command -v rm >/dev/null 2>&1; then
+  rm -rf .venv-demucs
+fi
+
+echo "[render-build] preparing Python environment for Demucs"
+if python3 -m venv .venv-demucs >/dev/null 2>&1; then
+  DEMUCS_PYTHON="$PWD/.venv-demucs/bin/python"
+  echo "[render-build] using virtualenv: .venv-demucs"
+else
+  echo "[render-build] python3 -m venv unavailable; using system python3"
+fi
 
 echo "[render-build] upgrading pip/setuptools/wheel"
-python -m pip install -U pip setuptools wheel
+"$DEMUCS_PYTHON" -m pip install -U pip setuptools wheel
 
 echo "[render-build] installing torch + torchaudio (CPU)"
-python -m pip install \
+"$DEMUCS_PYTHON" -m pip install \
   --index-url https://download.pytorch.org/whl/cpu \
   "torch==2.2.2" \
   "torchaudio==2.2.2"
 
 echo "[render-build] installing NumPy < 2 for compatibility"
-python -m pip install -U "numpy<2"
+"$DEMUCS_PYTHON" -m pip install -U "numpy<2"
 
 echo "[render-build] installing Demucs"
-python -m pip install -U "demucs==4.0.1"
+"$DEMUCS_PYTHON" -m pip install -U "demucs==4.0.1"
 
 echo "[render-build] Demucs install completed successfully"
