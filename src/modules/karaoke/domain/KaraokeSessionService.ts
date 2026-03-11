@@ -780,15 +780,9 @@ export class KaraokeSessionService {
       const current = path.resolve(session.instrumentalPath);
       if (current !== expected) return;
 
-      try {
-        fs.rmSync(current, { force: true });
-      } catch (_) {}
-
-      this.patchSession(sessionId, {
-        instrumentalPath: undefined,
-        message: 'Instrumental expirado automáticamente tras TTL.',
-        updatedAt: Date.now(),
-      });
+      // TTL vencido: limpiar sesión completa (source + instrumental + mix).
+      this.sessions.delete(sessionId);
+      this.deleteSessionArtifacts(sessionId);
     }, this.instrumentalTtlMs);
     timer.unref();
     this.instrumentalExpiryTimers.set(sessionId, timer);
