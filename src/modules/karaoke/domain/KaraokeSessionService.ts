@@ -28,6 +28,7 @@ export type KaraokeSession = {
   input: KaraokeSessionInput;
   sourcePath: string;
   instrumentalPath?: string;
+  instrumentalExpiresAt?: number;
   voicePath?: string;
   mixPath?: string;
   separatorModel: string;
@@ -186,6 +187,15 @@ export class KaraokeSessionService {
   getInstrumentalPath(sessionId: string): string | undefined {
     const session = this.sessions.get(sessionId);
     if (!session) return undefined;
+
+    if (
+      session.instrumentalExpiresAt &&
+      Date.now() >= session.instrumentalExpiresAt
+    ) {
+      this.removeSession(sessionId);
+      return undefined;
+    }
+
     if (
       (session.status === 'ready_to_record' || session.status === 'completed') &&
       session.instrumentalPath
@@ -201,6 +211,34 @@ export class KaraokeSessionService {
       return session.instrumentalPath;
     }
     return undefined;
+  }
+
+  markInstrumentalServed(sessionId: string): void {
+    if (this.instrumentalTtlMs <= 0) return;
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.instrumentalPath) return;
+    if (
+      session.status !== 'ready_to_record' &&
+      session.status !== 'completed'
+    ) {
+      return;
+    }
+
+    const now = Date.now();
+    if (session.instrumentalExpiresAt && now < session.instrumentalExpiresAt) {
+      return;
+    }
+
+    const expiresAt = now + this.instrumentalTtlMs;
+    this.patchSession(sessionId, {
+      instrumentalExpiresAt: expiresAt,
+      updatedAt: now,
+    });
+    this.scheduleInstrumentalExpiry(
+      sessionId,
+      session.instrumentalPath,
+      expiresAt
+    );
   }
 
   getMixPath(sessionId: string): string | undefined {
@@ -347,9 +385,9 @@ export class KaraokeSessionService {
           : 'Instrumental listo (fallback no IA)',
         updatedAt: Date.now(),
         instrumentalPath,
+        instrumentalExpiresAt: undefined,
         separatorModel: usedModel,
       });
-      this.scheduleInstrumentalExpiry(sessionId, instrumentalPath);
     } catch (error) {
       const message =
         error instanceof Error
@@ -713,8 +751,7 @@ export class KaraokeSessionService {
     const now = Date.now();
     for (const [id, session] of this.sessions.entries()) {
       if (now - session.updatedAt < this.sessionsTtlMs) continue;
-      this.sessions.delete(id);
-      this.deleteSessionArtifacts(id);
+      this.removeSession(id);
     }
   }
 
@@ -728,8 +765,7 @@ export class KaraokeSessionService {
     for (let i = 0; i < overflow; i += 1) {
       const session = sorted[i];
       if (!session) continue;
-      this.sessions.delete(session.id);
-      this.deleteSessionArtifacts(session.id);
+      this.removeSession(session.id);
     }
   }
 
@@ -751,6 +787,11 @@ export class KaraokeSessionService {
     return path.join(this.sessionsRoot, sessionId);
   }
 
+  private removeSession(sessionId: string): void {
+    this.sessions.delete(sessionId);
+    this.deleteSessionArtifacts(sessionId);
+  }
+
   private deleteSessionArtifacts(sessionId: string): void {
     this.clearInstrumentalExpiryTimer(sessionId);
     const dir = this.getSessionDir(sessionId);
@@ -766,24 +807,27 @@ export class KaraokeSessionService {
 
   private scheduleInstrumentalExpiry(
     sessionId: string,
-    instrumentalPath: string
+    instrumentalPath: string,
+    expiresAt: number
   ): void {
     if (this.instrumentalTtlMs <= 0) return;
     this.clearInstrumentalExpiryTimer(sessionId);
 
+    const delay = Math.max(0, expiresAt - Date.now());
     const timer = setTimeout(() => {
       this.instrumentalExpiryTimers.delete(sessionId);
       const session = this.sessions.get(sessionId);
       if (!session || !session.instrumentalPath) return;
+      if (session.instrumentalExpiresAt !== expiresAt) return;
+      if (Date.now() < expiresAt) return;
 
       const expected = path.resolve(instrumentalPath);
       const current = path.resolve(session.instrumentalPath);
       if (current !== expected) return;
 
       // TTL vencido: limpiar sesión completa (source + instrumental + mix).
-      this.sessions.delete(sessionId);
-      this.deleteSessionArtifacts(sessionId);
-    }, this.instrumentalTtlMs);
+      this.removeSession(sessionId);
+    }, delay);
     timer.unref();
     this.instrumentalExpiryTimers.set(sessionId, timer);
   }

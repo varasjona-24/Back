@@ -146,6 +146,7 @@ export class KaraokeController {
       return res.status(404).json({ error: 'Instrumental no disponible' });
     }
 
+    this.sessions.markInstrumentalServed(sessionId);
     return this.streamAudioFile(req, res, filePath);
   }
 
@@ -211,6 +212,7 @@ export class KaraokeController {
         instrumentalUrl: session.instrumentalPath
             ? `/api/v1/karaoke/sessions/${session.id}/instrumental`
             : null,
+        instrumentalExpiresAt: session.instrumentalExpiresAt ?? null,
       },
     };
   }
