@@ -12,11 +12,8 @@ fi
 echo "[render-build] building typescript"
 npm run build
 
-INSTALL_DEMUCS="${INSTALL_DEMUCS:-0}"
-if [ "${INSTALL_DEMUCS}" != "1" ]; then
-  echo "[render-build] INSTALL_DEMUCS=${INSTALL_DEMUCS}, skipping Demucs install"
-  exit 0
-fi
+# Force Demucs installation
+INSTALL_DEMUCS=1
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "[render-build] python3 not found; cannot install Demucs"
