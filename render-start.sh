@@ -1,14 +1,14 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
 echo "[render-start] starting service"
 
-if [[ "${KARAOKE_DEMUCS_ENABLED:-0}" == "1" ]]; then
+if [ "${KARAOKE_DEMUCS_ENABLED:-0}" = "1" ]; then
   DEMUCS_PYTHON="$PWD/.venv-demucs/bin/python"
 
-  if [[ -x "$DEMUCS_PYTHON" ]]; then
+  if [ -x "$DEMUCS_PYTHON" ]; then
     if "$DEMUCS_PYTHON" -c "import demucs" >/dev/null 2>&1; then
-      if [[ -z "${KARAOKE_DEMUCS_CMD:-}" ]]; then
+      if [ -z "${KARAOKE_DEMUCS_CMD:-}" ]; then
         export KARAOKE_DEMUCS_CMD="$DEMUCS_PYTHON -m demucs.separate -n {model} --two-stems=vocals --device cpu --shifts 1 --segment 7 --overlap 0.25 -o {outdir} {input}"
         echo "[render-start] KARAOKE_DEMUCS_CMD not set, using local .venv-demucs python"
       else

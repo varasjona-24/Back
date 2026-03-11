@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
 echo "[render-build] starting build"
 
@@ -10,7 +10,7 @@ echo "[render-build] building typescript"
 npm run build
 
 INSTALL_DEMUCS="${INSTALL_DEMUCS:-0}"
-if [[ "${INSTALL_DEMUCS}" != "1" ]]; then
+if [ "${INSTALL_DEMUCS}" != "1" ]; then
   echo "[render-build] INSTALL_DEMUCS=${INSTALL_DEMUCS}, skipping Demucs install"
   exit 0
 fi
@@ -38,7 +38,7 @@ PY
 echo "[render-build] creating local virtual environment for Demucs"
 rm -rf .venv-demucs
 python3 -m venv .venv-demucs
-source .venv-demucs/bin/activate
+. .venv-demucs/bin/activate
 
 echo "[render-build] upgrading pip/setuptools/wheel"
 python -m pip install -U pip setuptools wheel
