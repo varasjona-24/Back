@@ -4,6 +4,12 @@ set -eu
 echo "[render-start] starting service"
 
 APP_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+PYTHON_BIN=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+fi
 
 if [ "${KARAOKE_DEMUCS_ENABLED:-1}" = "1" ]; then
   DEMUCS_PYTHON=""
@@ -14,17 +20,19 @@ if [ "${KARAOKE_DEMUCS_ENABLED:-1}" = "1" ]; then
   if [ -x "$DEMUCS_VENV_PYTHON" ]; then
     DEMUCS_PYTHON="$DEMUCS_VENV_PYTHON"
     echo "[render-start] Demucs detected in .venv-demucs"
-  elif [ -d "$DEMUCS_PYDEPS_DIR" ] && command -v python3 >/dev/null 2>&1; then
+  elif [ -d "$DEMUCS_PYDEPS_DIR" ] && [ -n "$PYTHON_BIN" ]; then
     export PYTHONPATH="$DEMUCS_PYDEPS_DIR${PYTHONPATH:+:$PYTHONPATH}"
-    DEMUCS_PYTHON="python3"
+    DEMUCS_PYTHON="$PYTHON_BIN"
     echo "[render-start] Demucs configured from pydeps via PYTHONPATH"
-  elif [ -d "$LEGACY_PYDEPS_DIR" ] && command -v python3 >/dev/null 2>&1; then
+  elif [ -d "$LEGACY_PYDEPS_DIR" ] && [ -n "$PYTHON_BIN" ]; then
     export PYTHONPATH="$LEGACY_PYDEPS_DIR${PYTHONPATH:+:$PYTHONPATH}"
-    DEMUCS_PYTHON="python3"
+    DEMUCS_PYTHON="$PYTHON_BIN"
     echo "[render-start] Demucs configured from legacy .pydeps via PYTHONPATH"
-  elif command -v python3 >/dev/null 2>&1; then
-    DEMUCS_PYTHON="python3"
-    echo "[render-start] Demucs configured from system python3"
+  elif [ -n "$PYTHON_BIN" ]; then
+    DEMUCS_PYTHON="$PYTHON_BIN"
+    echo "[render-start] Demucs configured from system $PYTHON_BIN"
+  else
+    echo "[render-start] python interpreter not found in runtime PATH"
   fi
 
   if [ -n "$DEMUCS_PYTHON" ]; then

@@ -18,13 +18,21 @@ npm run build
 
 echo "[render-build] Demucs install is mandatory in this build (INSTALL_DEMUCS is ignored)"
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "[render-build] python3 not found; cannot install Demucs"
+PYTHON_BIN=""
+if command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+  echo "[render-build] python not found; cannot install Demucs"
   exit 1
 fi
 
+echo "[render-build] using Python interpreter: $PYTHON_BIN"
 echo "[render-build] checking Python compatibility for Demucs/Torch"
-python3 - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import sys
 
 major, minor = sys.version_info[:2]
@@ -38,18 +46,18 @@ if (major, minor) > (3, 11):
 print(f"[render-build] Python version OK: {major}.{minor}")
 PY
 
-DEMUCS_PYTHON="python3"
+DEMUCS_PYTHON="$PYTHON_BIN"
 DEMUCS_TARGET_DIR=""
 if command -v rm >/dev/null 2>&1; then
   rm -rf .venv-demucs
 fi
 
 echo "[render-build] preparing Python environment for Demucs"
-if python3 -m venv .venv-demucs >/dev/null 2>&1; then
+if "$PYTHON_BIN" -m venv .venv-demucs >/dev/null 2>&1; then
   DEMUCS_PYTHON="$PWD/.venv-demucs/bin/python"
   echo "[render-build] using virtualenv: .venv-demucs"
 else
-  echo "[render-build] python3 -m venv unavailable; using system python3"
+  echo "[render-build] python -m venv unavailable; using system python"
   DEMUCS_TARGET_DIR="$PWD/pydeps"
   rm -rf "$DEMUCS_TARGET_DIR"
   mkdir -p "$DEMUCS_TARGET_DIR"

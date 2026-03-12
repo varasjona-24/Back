@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": {
+    "node": "22",
+    "python": "3.11"
+  },
+  "deploy": {
+    "aptPackages": [
+      "ffmpeg",
+      "libatomic1"
+    ]
+  }
+}
