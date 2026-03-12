@@ -91,66 +91,32 @@ echo "[render-build] upgrading pip/setuptools/wheel"
 "$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U pip setuptools wheel
 
 if [ -n "$DEMUCS_TARGET_DIR" ]; then
-  echo "[render-build] installing torch + torchaudio (CPU) into target"
+  echo "[render-build] installing Demucs stack into target (CPU pinned)"
   "$DEMUCS_PYTHON" -m pip install \
     $PIP_ARGS \
     --target "$DEMUCS_TARGET_DIR" \
     --index-url https://download.pytorch.org/whl/cpu \
-    "torch==2.2.2" \
-    "torchaudio==2.2.2"
-
-  echo "[render-build] installing NumPy < 2 into target"
-  "$DEMUCS_PYTHON" -m pip install \
-    $PIP_ARGS \
-    --target "$DEMUCS_TARGET_DIR" \
-    -U "numpy<2"
-
-  echo "[render-build] installing Demucs runtime deps into target"
-  "$DEMUCS_PYTHON" -m pip install \
-    $PIP_ARGS \
-    --target "$DEMUCS_TARGET_DIR" \
+    --extra-index-url https://pypi.org/simple \
     -U \
-    "dora-search==0.1.12" \
-    "einops==0.8.2" \
-    "julius==0.2.7" \
-    "lameenc==1.8.2" \
-    "pyyaml==6.0.3" \
-    "tqdm==4.67.3"
-
-  echo "[render-build] installing Demucs package into target (no deps)"
-  "$DEMUCS_PYTHON" -m pip install \
-    $PIP_ARGS \
-    --target "$DEMUCS_TARGET_DIR" \
-    --no-deps \
-    -U "demucs==4.0.1"
+    "torch==2.2.2" \
+    "torchaudio==2.2.2" \
+    "numpy<2" \
+    "demucs==4.0.1"
 
   echo "[render-build] validating Demucs import from target"
   PYTHONPATH="$DEMUCS_TARGET_DIR${PYTHONPATH:+:$PYTHONPATH}" \
     "$DEMUCS_PYTHON" -c "import demucs, demucs.separate"
 else
-  echo "[render-build] installing torch + torchaudio (CPU)"
+  echo "[render-build] installing Demucs stack (CPU pinned)"
   "$DEMUCS_PYTHON" -m pip install \
     $PIP_ARGS \
     --index-url https://download.pytorch.org/whl/cpu \
-    "torch==2.2.2" \
-    "torchaudio==2.2.2"
-
-  echo "[render-build] installing NumPy < 2 for compatibility"
-  "$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "numpy<2"
-
-  echo "[render-build] installing Demucs runtime deps"
-  "$DEMUCS_PYTHON" -m pip install \
-    $PIP_ARGS \
+    --extra-index-url https://pypi.org/simple \
     -U \
-    "dora-search==0.1.12" \
-    "einops==0.8.2" \
-    "julius==0.2.7" \
-    "lameenc==1.8.2" \
-    "pyyaml==6.0.3" \
-    "tqdm==4.67.3"
-
-  echo "[render-build] installing Demucs package (no deps)"
-  "$DEMUCS_PYTHON" -m pip install $PIP_ARGS --no-deps -U "demucs==4.0.1"
+    "torch==2.2.2" \
+    "torchaudio==2.2.2" \
+    "numpy<2" \
+    "demucs==4.0.1"
 
   echo "[render-build] validating Demucs import"
   "$DEMUCS_PYTHON" -c "import demucs, demucs.separate"
