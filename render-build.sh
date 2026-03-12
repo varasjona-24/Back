@@ -51,6 +51,13 @@ else
   echo "[render-build] python3 -m venv unavailable; using system python3"
 fi
 
+PIP_ARGS=""
+if [ "$DEMUCS_PYTHON" = "python3" ]; then
+  export PIP_BREAK_SYSTEM_PACKAGES=1
+  PIP_ARGS="--break-system-packages"
+fi
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+
 echo "[render-build] ensuring pip is available"
 if ! "$DEMUCS_PYTHON" -m pip --version >/dev/null 2>&1; then
   echo "[render-build] pip not found; trying ensurepip"
@@ -66,7 +73,7 @@ if ! "$DEMUCS_PYTHON" -m pip --version >/dev/null 2>&1; then
       echo "[render-build] curl/wget not available and ensurepip failed; cannot install pip"
       exit 1
     fi
-    "$DEMUCS_PYTHON" /tmp/get-pip.py
+    "$DEMUCS_PYTHON" /tmp/get-pip.py $PIP_ARGS
   fi
 fi
 
@@ -75,24 +82,20 @@ if ! "$DEMUCS_PYTHON" -m pip --version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ "$DEMUCS_PYTHON" = "python3" ]; then
-  export PIP_BREAK_SYSTEM_PACKAGES=1
-fi
-export PIP_DISABLE_PIP_VERSION_CHECK=1
-
 echo "[render-build] upgrading pip/setuptools/wheel"
-"$DEMUCS_PYTHON" -m pip install -U pip setuptools wheel
+"$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U pip setuptools wheel
 
 echo "[render-build] installing torch + torchaudio (CPU)"
 "$DEMUCS_PYTHON" -m pip install \
+  $PIP_ARGS \
   --index-url https://download.pytorch.org/whl/cpu \
   "torch==2.2.2" \
   "torchaudio==2.2.2"
 
 echo "[render-build] installing NumPy < 2 for compatibility"
-"$DEMUCS_PYTHON" -m pip install -U "numpy<2"
+"$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "numpy<2"
 
 echo "[render-build] installing Demucs"
-"$DEMUCS_PYTHON" -m pip install -U "demucs==4.0.1"
+"$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "demucs==4.0.1"
 
 echo "[render-build] Demucs install completed successfully"
