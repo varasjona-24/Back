@@ -12,8 +12,7 @@ fi
 echo "[render-build] building typescript"
 npm run build
 
-# Force Demucs installation
-INSTALL_DEMUCS=1
+echo "[render-build] Demucs install is mandatory in this build (INSTALL_DEMUCS is ignored)"
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "[render-build] python3 not found; cannot install Demucs"

@@ -3,7 +3,7 @@ set -eu
 
 echo "[render-start] starting service"
 
-if [ "${KARAOKE_DEMUCS_ENABLED:-0}" = "1" ]; then
+if [ "${KARAOKE_DEMUCS_ENABLED:-1}" = "1" ]; then
   DEMUCS_PYTHON=""
   DEMUCS_VENV_PYTHON="$PWD/.venv-demucs/bin/python"
 

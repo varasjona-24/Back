@@ -36,13 +36,10 @@ Karaoke separation quality
 Render deployment notes
 
 - Added:
-  - `render-build.sh` (build Node app and optional Demucs install)
+  - `render-build.sh` (build Node app and mandatory Demucs install)
   - `render-start.sh` (auto-configures local Demucs command if venv exists)
   - `render.yaml` (blueprint defaults)
-- Default behavior is safe fallback mode (no Demucs install):
-  - `INSTALL_DEMUCS=0`
-  - `KARAOKE_DEMUCS_ENABLED=0`
-- To enable Demucs on Render:
-  1. set `INSTALL_DEMUCS=1`
-  2. set `KARAOKE_DEMUCS_ENABLED=1`
-  3. redeploy (build can take significantly longer)
+- Default behavior now installs Demucs during build.
+- To keep Demucs active at runtime:
+  1. set `KARAOKE_DEMUCS_ENABLED=1`
+  2. redeploy (build can take significantly longer)
