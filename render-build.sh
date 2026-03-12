@@ -39,6 +39,7 @@ print(f"[render-build] Python version OK: {major}.{minor}")
 PY
 
 DEMUCS_PYTHON="python3"
+DEMUCS_TARGET_DIR=""
 if command -v rm >/dev/null 2>&1; then
   rm -rf .venv-demucs
 fi
@@ -49,6 +50,10 @@ if python3 -m venv .venv-demucs >/dev/null 2>&1; then
   echo "[render-build] using virtualenv: .venv-demucs"
 else
   echo "[render-build] python3 -m venv unavailable; using system python3"
+  DEMUCS_TARGET_DIR="$PWD/.pydeps"
+  rm -rf "$DEMUCS_TARGET_DIR"
+  mkdir -p "$DEMUCS_TARGET_DIR"
+  echo "[render-build] will install Python deps into $DEMUCS_TARGET_DIR"
 fi
 
 PIP_ARGS=""
@@ -85,17 +90,39 @@ fi
 echo "[render-build] upgrading pip/setuptools/wheel"
 "$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U pip setuptools wheel
 
-echo "[render-build] installing torch + torchaudio (CPU)"
-"$DEMUCS_PYTHON" -m pip install \
-  $PIP_ARGS \
-  --index-url https://download.pytorch.org/whl/cpu \
-  "torch==2.2.2" \
-  "torchaudio==2.2.2"
+if [ -n "$DEMUCS_TARGET_DIR" ]; then
+  echo "[render-build] installing torch + torchaudio (CPU) into target"
+  "$DEMUCS_PYTHON" -m pip install \
+    $PIP_ARGS \
+    --target "$DEMUCS_TARGET_DIR" \
+    --index-url https://download.pytorch.org/whl/cpu \
+    "torch==2.2.2" \
+    "torchaudio==2.2.2"
 
-echo "[render-build] installing NumPy < 2 for compatibility"
-"$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "numpy<2"
+  echo "[render-build] installing NumPy < 2 into target"
+  "$DEMUCS_PYTHON" -m pip install \
+    $PIP_ARGS \
+    --target "$DEMUCS_TARGET_DIR" \
+    -U "numpy<2"
 
-echo "[render-build] installing Demucs"
-"$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "demucs==4.0.1"
+  echo "[render-build] installing Demucs into target"
+  "$DEMUCS_PYTHON" -m pip install \
+    $PIP_ARGS \
+    --target "$DEMUCS_TARGET_DIR" \
+    -U "demucs==4.0.1"
+else
+  echo "[render-build] installing torch + torchaudio (CPU)"
+  "$DEMUCS_PYTHON" -m pip install \
+    $PIP_ARGS \
+    --index-url https://download.pytorch.org/whl/cpu \
+    "torch==2.2.2" \
+    "torchaudio==2.2.2"
+
+  echo "[render-build] installing NumPy < 2 for compatibility"
+  "$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "numpy<2"
+
+  echo "[render-build] installing Demucs"
+  "$DEMUCS_PYTHON" -m pip install $PIP_ARGS -U "demucs==4.0.1"
+fi
 
 echo "[render-build] Demucs install completed successfully"
