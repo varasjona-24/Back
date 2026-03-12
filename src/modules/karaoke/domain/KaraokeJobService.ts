@@ -86,7 +86,7 @@ export class KaraokeJobService {
     this.demucsModel =
       options.demucsModel?.trim() ||
       process.env.KARAOKE_DEMUCS_MODEL?.trim() ||
-      'htdemucs_ft';
+      'htdemucs';
     const rawDemucsCmd =
       options.demucsCmd?.trim() ||
       process.env.KARAOKE_DEMUCS_CMD?.trim() ||

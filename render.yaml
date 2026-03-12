@@ -26,4 +26,4 @@ services:
       - key: KARAOKE_DEMUCS_ENABLED
         value: "1"
       - key: KARAOKE_DEMUCS_MODEL
-        value: htdemucs_ft
+        value: htdemucs

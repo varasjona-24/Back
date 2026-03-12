@@ -24,7 +24,7 @@ Karaoke separation quality
   - Keep ffmpeg available in PATH.
 - Optional env vars:
   - `KARAOKE_DEMUCS_ENABLED=1` (default `1`)
-  - `KARAOKE_DEMUCS_MODEL=htdemucs_ft` (quality model tag)
+  - `KARAOKE_DEMUCS_MODEL=htdemucs` (balanced speed/quality model tag)
   - `KARAOKE_DEMUCS_CMD="python3 -m demucs.separate -n {model} --two-stems=vocals --device cpu --shifts 2 --segment 7 --overlap 0.25 -o {outdir} {input}"`
   - `KARAOKE_DEMUCS_STRICT=0` (default `0`; set `1` if you do not want ffmpeg fallback quality)
   - `KARAOKE_SEPARATION_TIMEOUT_MS=900000` (default 15 min; general separation timeout)
