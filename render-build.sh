@@ -50,7 +50,7 @@ if python3 -m venv .venv-demucs >/dev/null 2>&1; then
   echo "[render-build] using virtualenv: .venv-demucs"
 else
   echo "[render-build] python3 -m venv unavailable; using system python3"
-  DEMUCS_TARGET_DIR="$PWD/.pydeps"
+  DEMUCS_TARGET_DIR="$PWD/pydeps"
   rm -rf "$DEMUCS_TARGET_DIR"
   mkdir -p "$DEMUCS_TARGET_DIR"
   echo "[render-build] will install Python deps into $DEMUCS_TARGET_DIR"
