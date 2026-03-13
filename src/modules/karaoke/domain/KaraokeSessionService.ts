@@ -11,6 +11,8 @@ export type KaraokeSessionStatus =
   | 'failed'
   | 'canceled';
 
+export type KaraokeVariantMode = 'instrumental' | 'spatial8d';
+
 export type KaraokeSessionInput = {
   mediaId?: string;
   title?: string;
@@ -20,6 +22,7 @@ export type KaraokeSessionInput = {
 
 export type KaraokeSession = {
   id: string;
+  mode: KaraokeVariantMode;
   status: KaraokeSessionStatus;
   progress: number;
   message: string;
@@ -29,6 +32,8 @@ export type KaraokeSession = {
   sourcePath: string;
   instrumentalPath?: string;
   instrumentalExpiresAt?: number;
+  spatial8dPath?: string;
+  spatial8dExpiresAt?: number;
   voicePath?: string;
   mixPath?: string;
   separatorModel: string;
@@ -39,6 +44,7 @@ type CreateSessionInput = {
   sourceBytes: Buffer;
   sourceFilename?: string;
   input: KaraokeSessionInput;
+  mode?: KaraokeVariantMode;
 };
 
 type MixInput = {
@@ -53,6 +59,7 @@ type KaraokeSessionServiceOptions = {
   sessionsRoot?: string;
   ffmpegBin?: string;
   separationCmd?: string;
+  spatialCmd?: string;
   demucsCmd?: string;
   demucsModel?: string;
   demucsEnabled?: boolean;
@@ -71,6 +78,7 @@ export class KaraokeSessionService {
   private readonly sessionsRoot: string;
   private readonly ffmpegBin: string;
   private readonly separationCmd?: string;
+  private readonly spatialCmd?: string;
   private readonly demucsCmd: string;
   private readonly demucsModel: string;
   private readonly demucsEnabled: boolean;
@@ -94,6 +102,7 @@ export class KaraokeSessionService {
     this.ffmpegBin = options.ffmpegBin ?? process.env.KARAOKE_FFMPEG_BIN ?? 'ffmpeg';
     this.separationCmd =
       options.separationCmd ?? process.env.KARAOKE_SEPARATION_CMD;
+    this.spatialCmd = options.spatialCmd ?? process.env.KARAOKE_SPATIAL8D_CMD;
     this.demucsModel =
       options.demucsModel?.trim() ||
       process.env.KARAOKE_DEMUCS_MODEL?.trim() ||
@@ -149,9 +158,11 @@ export class KaraokeSessionService {
     const sourcePath = path.join(sessionDir, `source.${sourceExt}`);
     fs.writeFileSync(sourcePath, input.sourceBytes);
 
-    const model = this.resolvePreferredSeparationModel();
+    const mode = this.normalizeMode(input.mode);
+    const model = this.resolvePreferredSeparationModel(mode);
     const session: KaraokeSession = {
       id: sessionId,
+      mode,
       status: 'separating',
       progress: 0.04,
       message: 'Subida recibida. Preparando separación...',
@@ -169,7 +180,13 @@ export class KaraokeSessionService {
     return this.cloneSession(session);
   }
 
-  private resolvePreferredSeparationModel(): string {
+  private resolvePreferredSeparationModel(mode: KaraokeVariantMode): string {
+    if (mode === 'spatial8d') {
+      if (this.spatialCmd?.trim()) {
+        return 'external_spatial8d_command';
+      }
+      return 'ffmpeg_spatial8d';
+    }
     if (this.separationCmd?.trim()) {
       return 'external_ai_command';
     }
@@ -185,38 +202,70 @@ export class KaraokeSessionService {
   }
 
   getInstrumentalPath(sessionId: string): string | undefined {
+    return this.getModeOutputPath(sessionId, 'instrumental');
+  }
+
+  getSpatial8dPath(sessionId: string): string | undefined {
+    return this.getModeOutputPath(sessionId, 'spatial8d');
+  }
+
+  private getModeOutputPath(
+    sessionId: string,
+    mode: KaraokeVariantMode
+  ): string | undefined {
     const session = this.sessions.get(sessionId);
     if (!session) return undefined;
+    if (session.mode !== mode) return undefined;
 
-    if (
-      session.instrumentalExpiresAt &&
-      Date.now() >= session.instrumentalExpiresAt
-    ) {
+    const outputPath = this.outputPathByMode(session, mode);
+    const expiresAt = this.outputExpiryByMode(session, mode);
+
+    if (expiresAt && Date.now() >= expiresAt) {
       this.removeSession(sessionId);
       return undefined;
     }
 
     if (
       (session.status === 'ready_to_record' || session.status === 'completed') &&
-      session.instrumentalPath
+      outputPath
     ) {
-      if (!fs.existsSync(session.instrumentalPath)) {
-        this.patchSession(sessionId, {
-          instrumentalPath: undefined,
-          message: 'Instrumental expirado. Genera uno nuevo.',
-          updatedAt: Date.now(),
-        });
+      if (!fs.existsSync(outputPath)) {
+        if (mode === 'instrumental') {
+          this.patchSession(sessionId, {
+            instrumentalPath: undefined,
+            message: 'Instrumental expirado. Genera uno nuevo.',
+            updatedAt: Date.now(),
+          });
+        } else {
+          this.patchSession(sessionId, {
+            spatial8dPath: undefined,
+            message: 'Audio 8D expirado. Genera uno nuevo.',
+            updatedAt: Date.now(),
+          });
+        }
         return undefined;
       }
-      return session.instrumentalPath;
+      return outputPath;
     }
     return undefined;
   }
 
   markInstrumentalServed(sessionId: string): void {
+    this.markModeOutputServed(sessionId, 'instrumental');
+  }
+
+  markSpatial8dServed(sessionId: string): void {
+    this.markModeOutputServed(sessionId, 'spatial8d');
+  }
+
+  private markModeOutputServed(
+    sessionId: string,
+    mode: KaraokeVariantMode
+  ): void {
     if (this.instrumentalTtlMs <= 0) return;
     const session = this.sessions.get(sessionId);
-    if (!session || !session.instrumentalPath) return;
+    if (!session) return;
+    if (session.mode !== mode) return;
     if (
       session.status !== 'ready_to_record' &&
       session.status !== 'completed'
@@ -224,21 +273,29 @@ export class KaraokeSessionService {
       return;
     }
 
+    const outputPath = this.outputPathByMode(session, mode);
+    if (!outputPath) return;
+
     const now = Date.now();
-    if (session.instrumentalExpiresAt && now < session.instrumentalExpiresAt) {
+    const currentExpiresAt = this.outputExpiryByMode(session, mode);
+    if (currentExpiresAt && now < currentExpiresAt) {
       return;
     }
 
     const expiresAt = now + this.instrumentalTtlMs;
-    this.patchSession(sessionId, {
-      instrumentalExpiresAt: expiresAt,
-      updatedAt: now,
-    });
-    this.scheduleInstrumentalExpiry(
-      sessionId,
-      session.instrumentalPath,
-      expiresAt
-    );
+    if (mode === 'instrumental') {
+      this.patchSession(sessionId, {
+        instrumentalExpiresAt: expiresAt,
+        updatedAt: now,
+      });
+    } else {
+      this.patchSession(sessionId, {
+        spatial8dExpiresAt: expiresAt,
+        updatedAt: now,
+      });
+    }
+
+    this.scheduleOutputExpiry(sessionId, mode, outputPath, expiresAt);
   }
 
   getMixPath(sessionId: string): string | undefined {
@@ -342,7 +399,14 @@ export class KaraokeSessionService {
     if (!session) return;
 
     const sessionDir = this.getSessionDir(sessionId);
-    const instrumentalPath = path.join(sessionDir, 'instrumental.wav');
+    const outputPath =
+      session.mode === 'spatial8d'
+        ? path.join(sessionDir, 'spatial8d.wav')
+        : path.join(sessionDir, 'instrumental.wav');
+    const progressLabel =
+      session.mode === 'spatial8d'
+        ? 'Procesando audio 8D...'
+        : 'Separando voces e instrumental...';
     const startedAt = Date.now();
     const heartbeat = setInterval(() => {
       const elapsedMs = Date.now() - startedAt;
@@ -351,47 +415,66 @@ export class KaraokeSessionService {
       const seconds = Math.floor(elapsedMs / 1000);
       this.patchSession(sessionId, {
         progress: Math.min(0.88, progress),
-        message: `Separando voces e instrumental... ${seconds}s`,
+        message: `${progressLabel} ${seconds}s`,
         updatedAt: Date.now(),
       });
     }, 3000);
     heartbeat.unref();
     this.patchSession(sessionId, {
       progress: 0.18,
-      message: 'Separando voces e instrumental...',
+      message: progressLabel,
       updatedAt: Date.now(),
     });
 
     try {
       const usedModel = await this.runSeparationCommand(
+        session.mode,
         session.sourcePath,
-        instrumentalPath
+        outputPath
       );
 
-      if (!fs.existsSync(instrumentalPath)) {
-        throw new Error('No se generó pista instrumental');
+      if (!fs.existsSync(outputPath)) {
+        throw new Error(
+          session.mode === 'spatial8d'
+            ? 'No se generó audio 8D'
+            : 'No se generó pista instrumental'
+        );
       }
 
-      const stat = fs.statSync(instrumentalPath);
+      const stat = fs.statSync(outputPath);
       if (stat.size <= 0) {
-        throw new Error('Pista instrumental vacía');
+        throw new Error(
+          session.mode === 'spatial8d'
+            ? 'Audio 8D vacío'
+            : 'Pista instrumental vacía'
+        );
       }
 
       this.patchSession(sessionId, {
         status: 'ready_to_record',
         progress: 1,
-        message: usedModel.startsWith('demucs_')
+        message: session.mode === 'spatial8d'
+          ? 'Audio 8D listo para reproducir'
+          : usedModel.startsWith('demucs_')
           ? 'Instrumental IA listo para grabar voz'
           : 'Instrumental listo (fallback no IA)',
         updatedAt: Date.now(),
-        instrumentalPath,
-        instrumentalExpiresAt: undefined,
+        instrumentalPath:
+            session.mode === 'instrumental' ? outputPath : undefined,
+        instrumentalExpiresAt:
+            session.mode === 'instrumental' ? undefined : session.instrumentalExpiresAt,
+        spatial8dPath: session.mode === 'spatial8d' ? outputPath : undefined,
+        spatial8dExpiresAt:
+            session.mode === 'spatial8d' ? undefined : session.spatial8dExpiresAt,
         separatorModel: usedModel,
+        error: undefined,
       });
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
+          : session.mode === 'spatial8d'
+          ? 'Error al procesar audio 8D'
           : 'Error al separar instrumental';
       this.patchSession(sessionId, {
         status: 'failed',
@@ -406,9 +489,28 @@ export class KaraokeSessionService {
   }
 
   private async runSeparationCommand(
+    mode: KaraokeVariantMode,
     inputPath: string,
     outputPath: string
   ): Promise<string> {
+    if (mode === 'spatial8d') {
+      if (this.spatialCmd?.trim()) {
+        await this.runExternalCommand(
+          this.spatialCmd,
+          {
+            input: inputPath,
+            output: outputPath,
+          },
+          'spatial 8d',
+          { timeoutMs: this.separationTimeoutMs }
+        );
+        return 'external_spatial8d_command';
+      }
+
+      await this.runSpatial8dCommand(inputPath, outputPath);
+      return 'ffmpeg_spatial8d';
+    }
+
     if (this.separationCmd?.trim()) {
       await this.runExternalCommand(
         this.separationCmd,
@@ -464,6 +566,40 @@ export class KaraokeSessionService {
     ];
 
     return this.runSpawnCommand(this.ffmpegBin, args, 'ffmpeg separation', {
+      timeoutMs: this.separationTimeoutMs,
+    });
+  }
+
+  private runSpatial8dCommand(
+    inputPath: string,
+    outputPath: string
+  ): Promise<void> {
+    const filter = [
+      'aformat=channel_layouts=stereo',
+      'highpass=f=35',
+      'lowpass=f=17500',
+      'apulsator=hz=0.085:amount=0.92:mode=sine:offset_l=0:offset_r=0.5',
+      'alimiter=limit=0.97',
+    ].join(',');
+
+    const args = [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      inputPath,
+      '-vn',
+      '-af',
+      filter,
+      '-ac',
+      '2',
+      '-ar',
+      '44100',
+      outputPath,
+    ];
+
+    return this.runSpawnCommand(this.ffmpegBin, args, 'ffmpeg spatial8d', {
       timeoutMs: this.separationTimeoutMs,
     });
   }
@@ -793,43 +929,66 @@ export class KaraokeSessionService {
   }
 
   private deleteSessionArtifacts(sessionId: string): void {
-    this.clearInstrumentalExpiryTimer(sessionId);
+    this.clearOutputExpiryTimer(sessionId);
     const dir = this.getSessionDir(sessionId);
     fs.rm(dir, { recursive: true, force: true }, () => {});
   }
 
-  private clearInstrumentalExpiryTimer(sessionId: string): void {
+  private clearOutputExpiryTimer(sessionId: string): void {
     const timer = this.instrumentalExpiryTimers.get(sessionId);
     if (!timer) return;
     clearTimeout(timer);
     this.instrumentalExpiryTimers.delete(sessionId);
   }
 
-  private scheduleInstrumentalExpiry(
+  private scheduleOutputExpiry(
     sessionId: string,
-    instrumentalPath: string,
+    mode: KaraokeVariantMode,
+    outputPath: string,
     expiresAt: number
   ): void {
     if (this.instrumentalTtlMs <= 0) return;
-    this.clearInstrumentalExpiryTimer(sessionId);
+    this.clearOutputExpiryTimer(sessionId);
 
     const delay = Math.max(0, expiresAt - Date.now());
     const timer = setTimeout(() => {
       this.instrumentalExpiryTimers.delete(sessionId);
       const session = this.sessions.get(sessionId);
-      if (!session || !session.instrumentalPath) return;
-      if (session.instrumentalExpiresAt !== expiresAt) return;
+      if (!session) return;
+      if (session.mode !== mode) return;
+      const currentPath = this.outputPathByMode(session, mode);
+      if (!currentPath) return;
+      const currentExpiresAt = this.outputExpiryByMode(session, mode);
+      if (currentExpiresAt !== expiresAt) return;
       if (Date.now() < expiresAt) return;
 
-      const expected = path.resolve(instrumentalPath);
-      const current = path.resolve(session.instrumentalPath);
+      const expected = path.resolve(outputPath);
+      const current = path.resolve(currentPath);
       if (current !== expected) return;
 
-      // TTL vencido: limpiar sesión completa (source + instrumental + mix).
+      // TTL vencido: limpiar sesión completa (source + output + mix).
       this.removeSession(sessionId);
     }, delay);
     timer.unref();
     this.instrumentalExpiryTimers.set(sessionId, timer);
+  }
+
+  private outputPathByMode(
+    session: KaraokeSession,
+    mode: KaraokeVariantMode
+  ): string | undefined {
+    return mode === 'instrumental'
+      ? session.instrumentalPath
+      : session.spatial8dPath;
+  }
+
+  private outputExpiryByMode(
+    session: KaraokeSession,
+    mode: KaraokeVariantMode
+  ): number | undefined {
+    return mode === 'instrumental'
+      ? session.instrumentalExpiresAt
+      : session.spatial8dExpiresAt;
   }
 
   private normalizeInput(input: KaraokeSessionInput): KaraokeSessionInput {
@@ -843,6 +1002,10 @@ export class KaraokeSessionService {
       artist: artist || undefined,
       source: source || undefined,
     };
+  }
+
+  private normalizeMode(raw: KaraokeVariantMode | undefined): KaraokeVariantMode {
+    return raw === 'spatial8d' ? 'spatial8d' : 'instrumental';
   }
 
   private extensionFromName(name: string | undefined, mode: 'audio' | 'voice'): string {

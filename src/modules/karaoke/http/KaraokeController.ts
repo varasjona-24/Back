@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { KaraokeJob, KaraokeJobService, karaokeJobService } from '../domain/KaraokeJobService.js';
 import {
   KaraokeSession,
+  KaraokeVariantMode,
   KaraokeSessionService,
   karaokeSessionService,
 } from '../domain/KaraokeSessionService.js';
@@ -94,6 +95,7 @@ export class KaraokeController {
       const title = this.stringQuery(req.query.title);
       const artist = this.stringQuery(req.query.artist);
       const source = this.stringQuery(req.query.source);
+      const mode = this.parseMode(this.stringQuery(req.query.mode));
       const filename =
         this.stringQuery(req.query.filename) ??
         this.fileNameFromHeader(req.header('x-filename')) ??
@@ -108,6 +110,7 @@ export class KaraokeController {
           artist,
           source,
         },
+        mode,
       });
 
       return res.status(202).json({
@@ -147,6 +150,21 @@ export class KaraokeController {
     }
 
     this.sessions.markInstrumentalServed(sessionId);
+    return this.streamAudioFile(req, res, filePath);
+  }
+
+  sessionSpatial8d(req: Request, res: Response) {
+    const sessionId = req.params.sessionId?.trim();
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId es requerido' });
+    }
+
+    const filePath = this.sessions.getSpatial8dPath(sessionId);
+    if (!filePath) {
+      return res.status(404).json({ error: 'Audio 8D no disponible' });
+    }
+
+    this.sessions.markSpatial8dServed(sessionId);
     return this.streamAudioFile(req, res, filePath);
   }
 
@@ -200,6 +218,7 @@ export class KaraokeController {
   private toApiSession(session: KaraokeSession) {
     return {
       id: session.id,
+      mode: session.mode,
       status: session.status,
       progress: session.progress,
       message: session.message,
@@ -209,10 +228,15 @@ export class KaraokeController {
       separatorModel: session.separatorModel,
       error: session.error,
       result: {
+        mode: session.mode,
         instrumentalUrl: session.instrumentalPath
             ? `/api/v1/karaoke/sessions/${session.id}/instrumental`
             : null,
         instrumentalExpiresAt: session.instrumentalExpiresAt ?? null,
+        spatial8dUrl: session.spatial8dPath
+            ? `/api/v1/karaoke/sessions/${session.id}/spatial8d`
+            : null,
+        spatial8dExpiresAt: session.spatial8dExpiresAt ?? null,
       },
     };
   }
@@ -263,6 +287,14 @@ export class KaraokeController {
     if (!raw) return undefined;
     const value = raw.trim();
     return value.length === 0 ? undefined : value;
+  }
+
+  private parseMode(raw: string | undefined): KaraokeVariantMode {
+    const value = raw?.trim().toLowerCase() ?? '';
+    if (value === 'spatial8d' || value === '8d' || value === 'spatial') {
+      return 'spatial8d';
+    }
+    return 'instrumental';
   }
 
 }

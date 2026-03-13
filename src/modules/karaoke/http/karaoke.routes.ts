@@ -16,6 +16,9 @@ router.get('/sessions/:sessionId', (req, res) => controller.getSession(req, res)
 router.get('/sessions/:sessionId/instrumental', (req, res) =>
   controller.sessionInstrumental(req, res)
 );
+router.get('/sessions/:sessionId/spatial8d', (req, res) =>
+  controller.sessionSpatial8d(req, res)
+);
 
 router.post('/jobs', (req, res) => controller.createJob(req, res));
 router.get('/jobs/:jobId', (req, res) => controller.getJob(req, res));
