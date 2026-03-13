@@ -574,13 +574,14 @@ export class KaraokeSessionService {
     inputPath: string,
     outputPath: string
   ): Promise<void> {
+    // 8D "concierto": mezcla de señal seca + paneo + ambiente corto.
     const filter = [
-      'aformat=channel_layouts=stereo',
-      'highpass=f=35',
-      'lowpass=f=17500',
-      'apulsator=hz=0.085:amount=0.92:mode=sine:offset_l=0:offset_r=0.5',
-      'alimiter=limit=0.97',
-    ].join(',');
+      'aformat=channel_layouts=stereo,highpass=f=32,lowpass=f=17800,asplit=3[dry][move][amb]',
+      '[move]apulsator=hz=0.065:amount=0.88:mode=sine:offset_l=0:offset_r=0.5,volume=0.95[move8d]',
+      '[amb]aecho=0.82:0.58:28|62|118:0.28|0.20|0.12,lowpass=f=9200,volume=0.34[hall]',
+      '[dry]volume=1.0[dry0]',
+      '[dry0][move8d][hall]amix=inputs=3:normalize=0,alimiter=limit=0.96',
+    ].join(';');
 
     const args = [
       '-y',
