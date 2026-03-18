@@ -21,8 +21,23 @@ export type AniDlDownloadInput = {
   quality?: DownloadQuality;
 };
 
+export function isAniDlCommandConfigured(): boolean {
+  return Boolean(process.env.ANIDL_CMD_TEMPLATE?.trim());
+}
+
 export function isAniDlEnabled(): boolean {
-  return (process.env.ANIDL_ENABLED ?? '0') === '1';
+  const raw = (process.env.ANIDL_ENABLED ?? '').trim().toLowerCase();
+
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') {
+    return true;
+  }
+
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') {
+    return false;
+  }
+
+  // If explicit enable flag is not present, allow auto-enable when command is configured.
+  return isAniDlCommandConfigured();
 }
 
 export function canHandleAniDlUrl(url: string): boolean {

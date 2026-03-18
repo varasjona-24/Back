@@ -15,6 +15,11 @@ import { GenericAudioSource } from '../infra/audio/GenericAudioSource.js';
 import { storeYtDlpCookies } from '../infra/ytDlp.js';
 import { AniDlAudioSource } from '../infra/anidl/AniDlAudioSource.js';
 import { AniDlVideoSource } from '../infra/anidl/AniDlVideoSource.js';
+import {
+  canHandleAniDlUrl,
+  isAniDlCommandConfigured,
+  isAniDlEnabled,
+} from '../infra/anidl/AniDlRunner.js';
 
 // ✅ NEW: MEGA
 import { MegaVideoSource } from '../infra/video/MegaVideoSources.js';
@@ -32,6 +37,20 @@ import { mediaLibrary } from '../domain/library/index.js';
 export class MediaController {
   private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
   private static cleanupTimers = new Map<string, NodeJS.Timeout>();
+
+  private validateAniDlConfig(url: string): string | null {
+    if (!canHandleAniDlUrl(url)) return null;
+
+    if (!isAniDlEnabled()) {
+      return 'URL de Crunchyroll/Hidive/ADN detectada, pero AniDL está deshabilitado (ANIDL_ENABLED=1).';
+    }
+
+    if (!isAniDlCommandConfigured()) {
+      return 'AniDL está habilitado, pero falta ANIDL_CMD_TEMPLATE.';
+    }
+
+    return null;
+  }
 
   private getAdminToken(req: Request): string | null {
     const headerToken = req.header('x-admin-token');
@@ -214,6 +233,11 @@ export class MediaController {
       return res.status(400).json({
         error: 'kind must be audio or video',
       });
+    }
+
+    const aniDlConfigError = this.validateAniDlConfig(String(url));
+    if (aniDlConfigError) {
+      return res.status(422).json({ error: aniDlConfigError });
     }
 
     try {

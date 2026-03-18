@@ -19,6 +19,7 @@ Notes
   - `ANIDL_ENABLED=1`
   - `ANIDL_CMD_TEMPLATE='your-command {url} {outdir} {kind} {format} {quality}'`
   - `ANIDL_TIMEOUT_MS=1800000` (default 30 min)
+  - If `ANIDL_ENABLED` is omitted, AniDL auto-enables when `ANIDL_CMD_TEMPLATE` is present.
   - Available placeholders in `ANIDL_CMD_TEMPLATE`: `{url}`, `{outdir}`, `{kind}`, `{format}`, `{quality}`
   - Also exported as env vars for the spawned command: `ANIDL_URL`, `ANIDL_OUTDIR`, `ANIDL_KIND`, `ANIDL_FORMAT`, `ANIDL_QUALITY`
   - AniDL CLI usually downloads by service + IDs (`--service`, `-s`, `-e`), so in many setups `ANIDL_CMD_TEMPLATE` should call your own wrapper script that maps URL -> AniDL args.
