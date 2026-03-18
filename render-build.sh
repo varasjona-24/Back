@@ -15,7 +15,7 @@ info() {
 }
 
 YTDLP_REQUIRED="${YTDLP_REQUIRED:-0}"
-DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-0}"
+DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-1}"
 ANIDL_STRICT_BUILD="${ANIDL_STRICT_BUILD:-0}"
 
 info "installing node dependencies"
@@ -50,32 +50,63 @@ install_demucs() {
     return 0
   fi
 
-  PYTHON_BIN=""
-  if command -v python3 >/dev/null 2>&1; then
-    PYTHON_BIN="python3"
-  elif command -v python >/dev/null 2>&1; then
-    PYTHON_BIN="python"
-  fi
-
-  if [ -z "$PYTHON_BIN" ]; then
-    warn "python not found; Demucs will be unavailable"
-    return 1
-  fi
-
-  info "using Python interpreter: $PYTHON_BIN"
-  if ! "$PYTHON_BIN" - <<'PY'
+  py_is_compatible() {
+    "$1" - <<'PY'
 import sys
 major, minor = sys.version_info[:2]
 if (major, minor) > (3, 11):
-    raise SystemExit(
-        f"Demucs pinned stack requires Python <= 3.11 (current: {major}.{minor})"
-    )
-print(f"Python version OK for Demucs: {major}.{minor}")
+    raise SystemExit(1)
 PY
-  then
-    warn "python version is incompatible with pinned Demucs stack"
-    return 1
+  }
+
+  PYTHON_BIN=""
+  if [ -n "${DEMUCS_PYTHON_BIN:-}" ] && command -v "${DEMUCS_PYTHON_BIN}" >/dev/null 2>&1; then
+    if py_is_compatible "${DEMUCS_PYTHON_BIN}"; then
+      PYTHON_BIN="${DEMUCS_PYTHON_BIN}"
+    else
+      warn "DEMUCS_PYTHON_BIN is incompatible (requires <=3.11): ${DEMUCS_PYTHON_BIN}"
+    fi
   fi
+
+  if [ -z "$PYTHON_BIN" ] && command -v python3 >/dev/null 2>&1; then
+    if py_is_compatible python3; then
+      PYTHON_BIN="python3"
+    fi
+  fi
+
+  if [ -z "$PYTHON_BIN" ] && command -v python >/dev/null 2>&1; then
+    if py_is_compatible python; then
+      PYTHON_BIN="python"
+    fi
+  fi
+
+  if [ -z "$PYTHON_BIN" ]; then
+    info "compatible Python (<=3.11) not found, trying uv bootstrap"
+
+    if ! command -v uv >/dev/null 2>&1; then
+      if command -v curl >/dev/null 2>&1; then
+        curl -LsSf https://astral.sh/uv/install.sh | sh || return 1
+      elif command -v wget >/dev/null 2>&1; then
+        wget -qO- https://astral.sh/uv/install.sh | sh || return 1
+      else
+        warn "curl/wget not available to install uv"
+        return 1
+      fi
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+
+    if command -v uv >/dev/null 2>&1; then
+      uv python install 3.11 || return 1
+      PYTHON_BIN="$(uv python find 3.11 2>/dev/null || true)"
+    fi
+
+    if [ -z "$PYTHON_BIN" ] || [ ! -x "$PYTHON_BIN" ]; then
+      warn "unable to provision Python 3.11 for Demucs"
+      return 1
+    fi
+  fi
+
+  info "using Python interpreter for Demucs: $PYTHON_BIN"
 
   DEMUCS_PYTHON="$PYTHON_BIN"
   DEMUCS_TARGET_DIR=""

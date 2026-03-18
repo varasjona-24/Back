@@ -62,3 +62,6 @@ Render deployment notes
 - To keep Demucs active at runtime:
   1. set `KARAOKE_DEMUCS_ENABLED=1`
   2. redeploy (build can take significantly longer)
+- Demucs build policy:
+  - `INSTALL_DEMUCS=1` and `DEMUCS_STRICT_BUILD=1` forces build to fail if Demucs cannot be installed.
+  - Build script now tries to auto-provision Python 3.11 via `uv` when system Python is incompatible.

@@ -29,6 +29,10 @@ services:
         value: "1"
       - key: KARAOKE_DEMUCS_MODEL
         value: htdemucs
+      - key: INSTALL_DEMUCS
+        value: "1"
+      - key: DEMUCS_STRICT_BUILD
+        value: "1"
       - key: ANIDL_ENABLED
         value: "1"
       - key: ANIDL_REF
