@@ -1,6 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
+APP_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+cd "$APP_DIR"
+
 echo "[render-build] starting build"
 
 echo "[render-build] installing node dependencies"
@@ -12,6 +15,9 @@ else
     npm install --include=dev
   fi
 fi
+
+echo "[render-build] refreshing yt-dlp binary"
+node src/scripts/download-ytdlp.mjs
 
 echo "[render-build] building typescript"
 npm run build
@@ -131,3 +137,75 @@ else
 fi
 
 echo "[render-build] Demucs install completed successfully"
+
+if [ "${ANIDL_ENABLED:-0}" = "1" ]; then
+  echo "[render-build] AniDL enabled, preparing CLI runtime"
+
+  if ! command -v node >/dev/null 2>&1; then
+    echo "[render-build] node is required for AniDL build"
+    exit 1
+  fi
+
+  NODE_MAJOR="$(node -p "Number(process.versions.node.split('.')[0])")"
+  if [ "${NODE_MAJOR:-0}" -lt 22 ]; then
+    echo "[render-build] AniDL requires Node >= 22. Current major: ${NODE_MAJOR:-unknown}"
+    exit 1
+  fi
+
+  if command -v corepack >/dev/null 2>&1; then
+    corepack enable >/dev/null 2>&1 || true
+    corepack prepare pnpm@10 --activate >/dev/null 2>&1 || true
+  fi
+
+  if ! command -v pnpm >/dev/null 2>&1; then
+    echo "[render-build] pnpm not found, installing pnpm@10 globally"
+    npm install -g pnpm@10
+  fi
+
+  ANIDL_REF="${ANIDL_REF:-v5.7.0}"
+  ANIDL_REPO="${ANIDL_REPO:-https://github.com/anidl/multi-downloader-nx.git}"
+  ANIDL_VENDOR_DIR="$APP_DIR/vendor/multi-downloader-nx"
+
+  echo "[render-build] installing AniDL from ${ANIDL_REPO} (${ANIDL_REF})"
+  rm -rf "$ANIDL_VENDOR_DIR"
+  mkdir -p "$APP_DIR/vendor"
+
+  if command -v git >/dev/null 2>&1; then
+    git clone --depth 1 --branch "$ANIDL_REF" "$ANIDL_REPO" "$ANIDL_VENDOR_DIR"
+  else
+    echo "[render-build] git is required to fetch AniDL source"
+    exit 1
+  fi
+
+  (
+    cd "$ANIDL_VENDOR_DIR"
+    if ! pnpm install --frozen-lockfile; then
+      echo "[render-build] pnpm install with frozen lockfile failed, retrying"
+      pnpm install
+    fi
+    pnpm run prebuild-cli
+  )
+
+  if [ ! -f "$ANIDL_VENDOR_DIR/lib/index.js" ]; then
+    echo "[render-build] AniDL build did not generate lib/index.js"
+    exit 1
+  fi
+
+  ANIDL_SHARED_HOME="${ANIDL_SHARED_HOME:-$APP_DIR/.anidl-home}"
+  mkdir -p \
+    "$ANIDL_SHARED_HOME/config" \
+    "$ANIDL_SHARED_HOME/fonts" \
+    "$ANIDL_SHARED_HOME/playready" \
+    "$ANIDL_SHARED_HOME/widevine" \
+    "$ANIDL_SHARED_HOME/videos"
+
+  for cfg in bin-path.yml cli-defaults.yml dir-path.yml gui.yml; do
+    src="$ANIDL_VENDOR_DIR/lib/config/$cfg"
+    dst="$ANIDL_SHARED_HOME/config/$cfg"
+    if [ -f "$src" ] && [ ! -f "$dst" ]; then
+      cp "$src" "$dst"
+    fi
+  done
+
+  echo "[render-build] AniDL CLI prepared successfully"
+fi

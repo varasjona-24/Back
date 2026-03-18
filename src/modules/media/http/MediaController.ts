@@ -13,6 +13,8 @@ import { YoutubeVideoSource } from '../infra/video/YoutubeVideoSource.js';
 import { GenericVideoSource } from '../infra/video/GenericVideoSurce.js';
 import { GenericAudioSource } from '../infra/audio/GenericAudioSource.js';
 import { storeYtDlpCookies } from '../infra/ytDlp.js';
+import { AniDlAudioSource } from '../infra/anidl/AniDlAudioSource.js';
+import { AniDlVideoSource } from '../infra/anidl/AniDlVideoSource.js';
 
 // ✅ NEW: MEGA
 import { MegaVideoSource } from '../infra/video/MegaVideoSources.js';
@@ -271,11 +273,13 @@ export class MediaController {
         [
           new YoutubeAudioSource(),
           new MegaAudioSource(), // ✅ MEGA audio
+          new AniDlAudioSource(), // ✅ AniDL (Crunchyroll/Hidive/ADN)
           new GenericAudioSource(), // fallback
         ],
         [
           new YoutubeVideoSource(),
           new MegaVideoSource(), // ✅ MEGA
+          new AniDlVideoSource(), // ✅ AniDL (Crunchyroll/Hidive/ADN)
           new GenericVideoSource(), // fallback
         ],
         mediaLibrary,

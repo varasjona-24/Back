@@ -15,6 +15,24 @@ Notes
 - To stream YouTube audio you must install `yt-dlp-wrap`:
   `npm install yt-dlp-wrap`.
 - The project uses ESM (`type: module`) and Node `--experimental-modules` compatible imports.
+- Optional AniDL integration for Crunchyroll/Hidive/ADN downloads:
+  - `ANIDL_ENABLED=1`
+  - `ANIDL_CMD_TEMPLATE='your-command {url} {outdir} {kind} {format} {quality}'`
+  - `ANIDL_TIMEOUT_MS=1800000` (default 30 min)
+  - Available placeholders in `ANIDL_CMD_TEMPLATE`: `{url}`, `{outdir}`, `{kind}`, `{format}`, `{quality}`
+  - Also exported as env vars for the spawned command: `ANIDL_URL`, `ANIDL_OUTDIR`, `ANIDL_KIND`, `ANIDL_FORMAT`, `ANIDL_QUALITY`
+  - AniDL CLI usually downloads by service + IDs (`--service`, `-s`, `-e`), so in many setups `ANIDL_CMD_TEMPLATE` should call your own wrapper script that maps URL -> AniDL args.
+  - The command must download media into `{outdir}`. If output format does not match (`mp3|m4a|mp4`), backend tries ffmpeg conversion.
+  - Render deployment now ships a default wrapper: `bin/anidl-render-wrapper.sh`
+    - Auto template (if unset): `ANIDL_CMD_TEMPLATE="$APP_DIR/bin/anidl-render-wrapper.sh {url} {outdir} {kind} {format} {quality}"`
+    - Wrapper defaults:
+      - `ANIDL_ENTRY=$APP_DIR/vendor/multi-downloader-nx/lib/index.js`
+      - `ANIDL_SHARED_HOME=$APP_DIR/.anidl-home`
+    - Optional auth envs used by wrapper:
+      - `ANIDL_USERNAME`, `ANIDL_PASSWORD`
+      - `ANIDL_TOKEN` (Crunchyroll)
+    - Optional ID overrides if URL parsing is not enough:
+      - `ANIDL_FORCE_SERVICE`, `ANIDL_FORCE_S`, `ANIDL_FORCE_E`, `ANIDL_FORCE_EXTID`, `ANIDL_FORCE_SERIES`
 
 Karaoke separation quality
 

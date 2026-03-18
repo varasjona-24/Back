@@ -9,7 +9,14 @@ let cachedCookiesPath: string | null = null;
 function getCookiesPath(): string {
   const envPath = process.env.YTDLP_COOKIES_PATH?.trim();
   if (envPath) return envPath;
-  return path.join(process.cwd(), 'tmp', 'yt-cookies.txt');
+
+  const defaultPath = path.join(process.cwd(), 'tmp', 'yt-cookies.txt');
+  if (fs.existsSync(defaultPath)) return defaultPath;
+
+  const legacyPath = path.join(process.cwd(), 'www.youtube.com_cookies.txt');
+  if (fs.existsSync(legacyPath)) return legacyPath;
+
+  return defaultPath;
 }
 
 export async function storeYtDlpCookies(content: string): Promise<string> {

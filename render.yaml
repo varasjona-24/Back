@@ -7,6 +7,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
       - key: MEDIA_PATH
@@ -27,3 +29,9 @@ services:
         value: "1"
       - key: KARAOKE_DEMUCS_MODEL
         value: htdemucs
+      - key: ANIDL_ENABLED
+        value: "1"
+      - key: ANIDL_REF
+        value: v5.7.0
+      - key: ANIDL_TIMEOUT_MS
+        value: "2700000"
