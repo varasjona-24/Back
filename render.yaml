@@ -33,9 +33,3 @@ services:
         value: "1"
       - key: DEMUCS_STRICT_BUILD
         value: "1"
-      - key: ANIDL_ENABLED
-        value: "1"
-      - key: ANIDL_REF
-        value: v5.7.0
-      - key: ANIDL_TIMEOUT_MS
-        value: "2700000"

@@ -4,9 +4,6 @@ export function detectSourceOrigin(url: string): SourceOrigin {
   const u = url.toLowerCase();
 
   if (u.includes('youtube.com') || u.includes('youtu.be')) return 'youtube';
-  if (u.includes('crunchyroll.com')) return 'crunchyroll';
-  if (u.includes('hidive.com')) return 'hidive';
-  if (u.includes('animationdigitalnetwork.') || u.includes('adn.fr')) return 'adn';
   if (u.includes('instagram.com')) return 'instagram';
   if (u.includes('vimeo.com')) return 'vimeo';
   if (u.includes('reddit.com')) return 'reddit';

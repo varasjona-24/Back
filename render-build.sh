@@ -16,7 +16,6 @@ info() {
 
 YTDLP_REQUIRED="${YTDLP_REQUIRED:-0}"
 DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-1}"
-ANIDL_STRICT_BUILD="${ANIDL_STRICT_BUILD:-0}"
 
 info "installing node dependencies"
 if [ -d node_modules ] && [ -n "$(find node_modules -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
@@ -182,118 +181,12 @@ PY
   return 0
 }
 
-install_anidl() {
-  if [ "${ANIDL_ENABLED:-0}" != "1" ]; then
-    info "AniDL disabled (ANIDL_ENABLED=${ANIDL_ENABLED:-0})"
-    return 0
-  fi
-
-  if ! command -v node >/dev/null 2>&1; then
-    warn "node not found; AniDL will be skipped"
-    return 1
-  fi
-
-  NODE_MAJOR="$(node -p "Number(process.versions.node.split('.')[0])" 2>/dev/null || echo 0)"
-  if [ "${NODE_MAJOR:-0}" -lt 22 ]; then
-    warn "AniDL requires Node >= 22 (current major: ${NODE_MAJOR:-unknown})"
-    return 1
-  fi
-
-  if command -v corepack >/dev/null 2>&1; then
-    corepack enable >/dev/null 2>&1 || true
-    corepack prepare pnpm@10 --activate >/dev/null 2>&1 || true
-  fi
-
-  if ! command -v pnpm >/dev/null 2>&1; then
-    info "pnpm not found, installing pnpm@10 globally"
-    npm install -g pnpm@10 || return 1
-  fi
-
-  ANIDL_REF="${ANIDL_REF:-v5.7.0}"
-  ANIDL_REPO="${ANIDL_REPO:-https://github.com/anidl/multi-downloader-nx.git}"
-  ANIDL_VENDOR_DIR="$APP_DIR/vendor/multi-downloader-nx"
-
-  rm -rf "$ANIDL_VENDOR_DIR"
-  mkdir -p "$APP_DIR/vendor"
-
-  if command -v git >/dev/null 2>&1; then
-    info "cloning AniDL from ${ANIDL_REPO} (${ANIDL_REF})"
-    if ! git clone --depth 1 --branch "$ANIDL_REF" "$ANIDL_REPO" "$ANIDL_VENDOR_DIR"; then
-      warn "git clone failed for AniDL"
-      return 1
-    fi
-  else
-    info "git not found, downloading AniDL source tarball"
-    TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t anidl-src)"
-    TAR_PATH="$TMP_DIR/anidl.tar.gz"
-    CODELOAD_URL="https://codeload.github.com/anidl/multi-downloader-nx/tar.gz/refs/tags/$ANIDL_REF"
-
-    if command -v curl >/dev/null 2>&1; then
-      curl -fsSL "$CODELOAD_URL" -o "$TAR_PATH" || return 1
-    elif command -v wget >/dev/null 2>&1; then
-      wget -qO "$TAR_PATH" "$CODELOAD_URL" || return 1
-    else
-      warn "neither curl nor wget available to fetch AniDL tarball"
-      return 1
-    fi
-
-    tar -xzf "$TAR_PATH" -C "$TMP_DIR" || return 1
-    SRC_DIR="$(find "$TMP_DIR" -maxdepth 1 -type d -name 'multi-downloader-nx-*' | head -n 1)"
-    if [ -z "$SRC_DIR" ] || [ ! -d "$SRC_DIR" ]; then
-      warn "failed to unpack AniDL source archive"
-      return 1
-    fi
-    mv "$SRC_DIR" "$ANIDL_VENDOR_DIR"
-  fi
-
-  (
-    cd "$ANIDL_VENDOR_DIR"
-    if ! pnpm install --frozen-lockfile; then
-      warn "pnpm --frozen-lockfile failed, retrying without frozen lockfile"
-      pnpm install
-    fi
-    pnpm run prebuild-cli
-  ) || return 1
-
-  if [ ! -f "$ANIDL_VENDOR_DIR/lib/index.js" ]; then
-    warn "AniDL build did not generate lib/index.js"
-    return 1
-  fi
-
-  ANIDL_SHARED_HOME="${ANIDL_SHARED_HOME:-$APP_DIR/.anidl-home}"
-  mkdir -p \
-    "$ANIDL_SHARED_HOME/config" \
-    "$ANIDL_SHARED_HOME/fonts" \
-    "$ANIDL_SHARED_HOME/playready" \
-    "$ANIDL_SHARED_HOME/widevine" \
-    "$ANIDL_SHARED_HOME/videos"
-
-  for cfg in bin-path.yml cli-defaults.yml dir-path.yml gui.yml; do
-    src="$ANIDL_VENDOR_DIR/lib/config/$cfg"
-    dst="$ANIDL_SHARED_HOME/config/$cfg"
-    if [ -f "$src" ] && [ ! -f "$dst" ]; then
-      cp "$src" "$dst"
-    fi
-  done
-
-  info "AniDL CLI prepared successfully"
-  return 0
-}
-
 if ! install_demucs; then
   if [ "$DEMUCS_STRICT_BUILD" = "1" ]; then
     echo "[render-build] Demucs install failed and DEMUCS_STRICT_BUILD=1" >&2
     exit 1
   fi
   warn "Demucs setup failed; runtime will fallback to ffmpeg mode"
-fi
-
-if ! install_anidl; then
-  if [ "$ANIDL_STRICT_BUILD" = "1" ]; then
-    echo "[render-build] AniDL setup failed and ANIDL_STRICT_BUILD=1" >&2
-    exit 1
-  fi
-  warn "AniDL setup failed; service will deploy without AniDL support"
 fi
 
 info "build finished"

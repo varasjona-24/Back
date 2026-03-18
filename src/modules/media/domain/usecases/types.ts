@@ -37,9 +37,6 @@ export interface AudioSource {
  */
 export type SourceOrigin =
   | 'youtube'
-  | 'crunchyroll'
-  | 'hidive'
-  | 'adn'
   | 'instagram'
   | 'vimeo'
   | 'reddit'
