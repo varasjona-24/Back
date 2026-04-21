@@ -64,7 +64,9 @@ export class GenericVideoSource implements VideoSource {
     const tmpDir = path.resolve('tmp');
     await ensureDir(tmpDir);
 
-    const tmpFile = path.join(tmpDir, `${Date.now()}-generic-video.mp4`);
+    const token = Date.now();
+    const tmpFile = path.join(tmpDir, `${token}-generic-video.mp4`);
+    const ytdlpFile = path.join(tmpDir, `${token}-generic-video-download.mp4`);
 
     // 1) Intentar con yt-dlp
     try {
@@ -77,13 +79,16 @@ export class GenericVideoSource implements VideoSource {
         '-f', format,
         '--merge-output-format', 'mp4',
         '--postprocessor-args', 'Merger+ffmpeg:-movflags +faststart',
-        '-o', tmpFile,
+        '-o', ytdlpFile,
         url,
       ];
 
       const { code, stderr } = await run(ytDlpPath, ytdlpArgs, { timeoutMs: 1000 * 60 * 8 });
 
-      if (code === 0 && fs.existsSync(tmpFile)) {
+      if (code === 0 && fs.existsSync(ytdlpFile)) {
+        await this.normalizeForMobile(ytdlpFile, tmpFile);
+        unlinkQuiet(ytdlpFile);
+
         return {
           stream: fs.createReadStream(tmpFile),
           mimeType: 'video/mp4',
@@ -91,12 +96,9 @@ export class GenericVideoSource implements VideoSource {
         };
       }
 
-      // si falló, seguimos a ffmpeg
-      // guardamos stderr por si queremos loguearlo
-      // console.error('[GenericVideoSource] yt-dlp failed:', stderr);
+      console.error('[GenericVideoSource] yt-dlp failed:', stderr.trim() || `exit code ${code}`);
     } catch (e) {
-      // yt-dlp no está, o se cayó; intentamos ffmpeg igual
-      // console.error('[GenericVideoSource] yt-dlp error:', e);
+      console.error('[GenericVideoSource] yt-dlp error:', e);
     }
 
     // 2) Fallback: ffmpeg (sirve si es mp4 directo / m3u8 / dash sin restricciones)
@@ -153,7 +155,30 @@ export class GenericVideoSource implements VideoSource {
       `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}][dynamic_range=SDR]`,
       `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}]+bestaudio[ext=m4a]`,
       `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}]`,
+      `bv*[height<=${maxHeight}]+ba/b[height<=${maxHeight}]`,
     ].join('/');
+  }
+
+  private async normalizeForMobile(inputPath: string, outputPath: string): Promise<void> {
+    const ffArgs = [
+      '-y',
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-i', inputPath,
+      '-c:v', 'libx264',
+      '-preset', 'veryfast',
+      '-crf', '23',
+      '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac',
+      '-b:a', '160k',
+      '-movflags', '+faststart',
+      outputPath,
+    ];
+
+    const { code, stderr } = await run('ffmpeg', ffArgs, { timeoutMs: 1000 * 60 * 8 });
+    if (code !== 0 || !fs.existsSync(outputPath) || fs.statSync(outputPath).size === 0) {
+      throw new Error(`ffmpeg normalize failed (code=${code}) ${stderr ? `: ${stderr}` : ''}`);
+    }
   }
 
   private mapQuality(quality: DownloadQuality): number {
