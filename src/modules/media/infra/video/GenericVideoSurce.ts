@@ -76,6 +76,7 @@ export class GenericVideoSource implements VideoSource {
         '--no-playlist',
         '-f', format,
         '--merge-output-format', 'mp4',
+        '--postprocessor-args', 'Merger+ffmpeg:-movflags +faststart',
         '-o', tmpFile,
         url,
       ];
@@ -100,14 +101,17 @@ export class GenericVideoSource implements VideoSource {
 
     // 2) Fallback: ffmpeg (sirve si es mp4 directo / m3u8 / dash sin restricciones)
     try {
-      // -c copy: no recodifica
-      // -movflags +faststart: ayuda a reproducir antes
       const ffArgs = [
         '-y',
         '-hide_banner',
         '-loglevel', 'error',
         '-i', url,
-        '-c', 'copy',
+        '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '160k',
         '-movflags', '+faststart',
         tmpFile,
       ];
@@ -143,14 +147,24 @@ export class GenericVideoSource implements VideoSource {
   }
 
   private buildFormat(quality: DownloadQuality): string {
+    const maxHeight = this.mapQuality(quality);
+    return [
+      `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}][dynamic_range=SDR]+bestaudio[ext=m4a]`,
+      `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}][dynamic_range=SDR]`,
+      `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}]+bestaudio[ext=m4a]`,
+      `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}]`,
+    ].join('/');
+  }
+
+  private mapQuality(quality: DownloadQuality): number {
     switch (quality) {
       case 'low':
-        return 'bv*[height<=360]+ba/b[height<=360]';
+        return 360;
       case 'medium':
-        return 'bv*[height<=720]+ba/b[height<=720]';
+        return 720;
       case 'high':
       default:
-        return 'bv*+ba/b';
+        return 1080;
     }
   }
 }

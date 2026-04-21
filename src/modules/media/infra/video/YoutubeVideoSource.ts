@@ -29,7 +29,12 @@ export class YoutubeVideoSource implements VideoSource {
     );
 
     const maxHeight = this.mapQuality(quality);
-    const format = `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}]+bestaudio[ext=m4a]/best[ext=mp4]`;
+    const format = [
+      `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}][dynamic_range=SDR]+bestaudio[ext=m4a]`,
+      `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}][dynamic_range=SDR]`,
+      `bestvideo[ext=mp4][vcodec^=avc1][height<=${maxHeight}]+bestaudio[ext=m4a]`,
+      `best[ext=mp4][vcodec^=avc1][height<=${maxHeight}]`,
+    ].join('/');
 
     const ytDlpPath = await getYtDlpPath();
     const extraArgs = await getYtDlpExtraArgs();
@@ -37,6 +42,7 @@ export class YoutubeVideoSource implements VideoSource {
       ...extraArgs,
       '-f', format,
       '--merge-output-format', 'mp4',
+      '--postprocessor-args', 'Merger+ffmpeg:-movflags +faststart',
       '--no-playlist',
       '-o', tmpFile,
       url
