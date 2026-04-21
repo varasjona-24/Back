@@ -15,7 +15,8 @@ info() {
 }
 
 YTDLP_REQUIRED="${YTDLP_REQUIRED:-0}"
-DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-1}"
+INSTALL_DEMUCS="${INSTALL_DEMUCS:-0}"
+DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-0}"
 
 info "installing node dependencies"
 if [ -d node_modules ] && [ -n "$(find node_modules -mindepth 1 -maxdepth 1 2>/dev/null | head -n 1)" ]; then
@@ -44,8 +45,8 @@ info "building typescript"
 npm run build
 
 install_demucs() {
-  if [ "${INSTALL_DEMUCS:-1}" != "1" ] || [ "${KARAOKE_DEMUCS_ENABLED:-1}" != "1" ]; then
-    info "skipping Demucs install (INSTALL_DEMUCS=${INSTALL_DEMUCS:-1}, KARAOKE_DEMUCS_ENABLED=${KARAOKE_DEMUCS_ENABLED:-1})"
+  if [ "$INSTALL_DEMUCS" != "1" ] || [ "${KARAOKE_DEMUCS_ENABLED:-1}" != "1" ]; then
+    info "skipping Demucs install (INSTALL_DEMUCS=$INSTALL_DEMUCS, KARAOKE_DEMUCS_ENABLED=${KARAOKE_DEMUCS_ENABLED:-1})"
     return 0
   fi
 
