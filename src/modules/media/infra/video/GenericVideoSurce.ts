@@ -9,6 +9,7 @@ import type {
 } from '../../domain/usecases/types.js';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
 import { randomTmpFilePath } from '../../../../shared/fsSafety.js';
+import { isSafeMediaUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 function ensureDir(pth: string) {
   return fs.promises.mkdir(pth, { recursive: true });
@@ -52,9 +53,8 @@ function run(cmd: string, args: string[], opts?: { timeoutMs?: number }) {
 }
 
 export class GenericVideoSource implements VideoSource {
-  canHandle(_url: string): boolean {
-    // fallback total
-    return true;
+  canHandle(url: string): boolean {
+    return isSafeMediaUrl(url);
   }
 
   async getVideoStream(
@@ -62,6 +62,8 @@ export class GenericVideoSource implements VideoSource {
     _range?: string,
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
+
     const tmpDir = path.resolve('tmp');
     await ensureDir(tmpDir);
 

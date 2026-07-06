@@ -10,6 +10,7 @@ import type {
 } from '../../domain/usecases/types.js';
 import { getMegaApi } from '../mega/megaAuth.js';
 import { cleanupDir } from '../../../../shared/fsSafety.js';
+import { isMegaUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 type MegaApiLike = object;
 
@@ -79,8 +80,7 @@ function buildTmpFilePath(tmpDir: string, rawName?: string): string {
 
 export class MegaAudioSource implements AudioSource {
   canHandle(url: string): boolean {
-    const u = url.toLowerCase();
-    return u.includes('mega.nz/') || u.includes('mega.co.nz/');
+    return isMegaUrl(url);
   }
 
   async getAudioStream(
@@ -89,6 +89,8 @@ export class MegaAudioSource implements AudioSource {
     format: AudioFormat = 'm4a',
     _quality?: DownloadQuality
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
+
     const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tmpDir = path.resolve('tmp', `mega-audio-${token}`);
     await fs.promises.mkdir(tmpDir, { recursive: true });

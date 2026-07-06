@@ -9,6 +9,7 @@ import type {
 } from '../../domain/usecases/types.js';
 import { getMegaApi } from '../mega/megaAuth.js';
 import { cleanupDir } from '../../../../shared/fsSafety.js';
+import { isMegaUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 type MegaApiLike = object;
 
@@ -83,8 +84,7 @@ function resolveVideoMime(filePath: string): string {
 
 export class MegaVideoSource implements VideoSource {
   canHandle(url: string): boolean {
-    const u = url.toLowerCase();
-    return u.includes('mega.nz/') || u.includes('mega.co.nz/');
+    return isMegaUrl(url);
   }
 
   async getVideoStream(
@@ -92,6 +92,8 @@ export class MegaVideoSource implements VideoSource {
     _range?: string,
     _quality?: DownloadQuality
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
+
     const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tmpDir = path.resolve('tmp', `mega-video-${token}`);
     await fs.promises.mkdir(tmpDir, { recursive: true });

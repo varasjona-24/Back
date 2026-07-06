@@ -19,6 +19,7 @@ import {
   cleanupTempArtifact,
   ensureDirForFile,
 } from '../../../../shared/fsSafety.js';
+import { parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 export type DownloadMediaVariantInput = {
   mediaId: string;
@@ -42,6 +43,8 @@ export class DownloadMediaVariantUseCase {
 
   async execute(input: DownloadMediaVariantInput) {
     const { mediaId, url, kind, format, quality } = input;
+
+    parseSafeMediaUrl(url);
 
     const origin = detectSourceOrigin(url);
     const sourceId = Buffer.from(url).toString('base64');

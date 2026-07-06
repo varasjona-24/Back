@@ -13,11 +13,12 @@ import {
   ensureDirForFile,
   randomTmpFilePath,
 } from '../../../../shared/fsSafety.js';
+import { isSafeMediaUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 export class GenericAudioSource implements AudioSource {
 
   canHandle(_url: string): boolean {
-    return true;
+    return isSafeMediaUrl(_url);
   }
 
   async getAudioStream(
@@ -26,6 +27,8 @@ export class GenericAudioSource implements AudioSource {
     format: AudioFormat = 'm4a',
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
+
     const tmpFilePath = randomTmpFilePath('generic-audio', format);
     await ensureDirForFile(tmpFilePath);
     const ytDlpPath = await getYtDlpPath();

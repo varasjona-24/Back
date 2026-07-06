@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
+import { isYoutubeUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 export interface YoutubeResolvedInfo {
   title: string;
@@ -11,6 +12,11 @@ export interface YoutubeResolvedInfo {
 export class YoutubeInfoSource {
 
   async resolve(url: string): Promise<YoutubeResolvedInfo> {
+    if (!isYoutubeUrl(url)) {
+      throw new Error('YouTube URL is required');
+    }
+    parseSafeMediaUrl(url);
+
     const ytDlpPath = await getYtDlpPath();
     const extraArgs = await getYtDlpExtraArgs();
 

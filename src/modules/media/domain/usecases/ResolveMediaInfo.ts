@@ -4,6 +4,7 @@ import { YoutubeInfoSource } from '../../infra/info/YoutubeInfoSource.js';
 import { normalizeMediaInfo } from '../utils/normalizeMedia.js';
 import { mediaLibrary } from '../library/index.js';
 import { detectSourceOrigin } from './Detect_Source_Origin.js';
+import { parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 import type { NormalizedMediaInfo } from './types.js';
 
@@ -11,9 +12,7 @@ export class ResolveMediaInfo {
   private youtube = new YoutubeInfoSource();
 
   async execute(url: string): Promise<NormalizedMediaInfo> {
-    if (!this.isValidUrl(url)) {
-      throw new Error('Invalid URL');
-    }
+    parseSafeMediaUrl(url);
 
     const origin = detectSourceOrigin(url);
 
@@ -87,12 +86,4 @@ export class ResolveMediaInfo {
     return media;
   }
 
-  private isValidUrl(url: string): boolean {
-    try {
-      new URL(url);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }

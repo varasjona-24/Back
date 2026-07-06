@@ -27,6 +27,7 @@ import {
 
 import { mediaLibrary } from '../domain/library/index.js';
 import { cleanupFile, isPathInsideRoot } from '../../../shared/fsSafety.js';
+import { isMegaUrl, parseSafeMediaUrl } from '../../../shared/urlSafety.js';
 
 export class MediaController {
   private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
@@ -77,6 +78,13 @@ export class MediaController {
     }
 
     try {
+      parseSafeMediaUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL';
+      return res.status(400).json({ error: message });
+    }
+
+    try {
       const useCase = new ResolveMedia([new YoutubeAudioSource()]);
 
       const audio = await useCase.execute(url);
@@ -113,6 +121,13 @@ export class MediaController {
 
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'url is required' });
+    }
+
+    try {
+      parseSafeMediaUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL';
+      return res.status(400).json({ error: message });
     }
 
     try {
@@ -221,6 +236,17 @@ export class MediaController {
       });
     }
 
+    if (typeof url !== 'string') {
+      return res.status(400).json({ error: 'url must be a string' });
+    }
+
+    try {
+      parseSafeMediaUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL';
+      return res.status(400).json({ error: message });
+    }
+
     try {
       // ✅ Resolve info (pero si falla y es MEGA, no rompemos el flujo)
       let media: any;
@@ -228,9 +254,7 @@ export class MediaController {
         const resolveInfo = new ResolveMediaInfo();
         media = await resolveInfo.execute(url);
       } catch (e) {
-        const u = String(url).toLowerCase();
-        const isMega = u.includes('mega.nz/') || u.includes('mega.co.nz/');
-        if (!isMega) throw e;
+        if (!isMegaUrl(url)) throw e;
 
         // fallback mínimo para permitir descarga de MEGA
         media = {

@@ -14,11 +14,12 @@ import {
   ensureDirForFile,
   randomTmpFilePath,
 } from '../../../../shared/fsSafety.js';
+import { isYoutubeUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 export class YoutubeAudioSource implements AudioSource {
 
   canHandle(url: string): boolean {
-    return /youtube\.com|youtu\.be/.test(url);
+    return isYoutubeUrl(url);
   }
 
   /**
@@ -32,6 +33,8 @@ export class YoutubeAudioSource implements AudioSource {
     format: AudioFormat = 'm4a',
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
+
     const tmpFilePath = randomTmpFilePath('youtube-audio', format);
     await ensureDirForFile(tmpFilePath);
 

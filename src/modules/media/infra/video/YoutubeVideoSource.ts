@@ -11,11 +11,12 @@ import {
   ensureDirForFile,
   randomTmpFilePath,
 } from '../../../../shared/fsSafety.js';
+import { isYoutubeUrl, parseSafeMediaUrl } from '../../../../shared/urlSafety.js';
 
 export class YoutubeVideoSource implements VideoSource {
 
   canHandle(url: string): boolean {
-    return /youtube\.com|youtu\.be/.test(url);
+    return isYoutubeUrl(url);
   }
 
   async getVideoStream(
@@ -23,6 +24,7 @@ export class YoutubeVideoSource implements VideoSource {
     _range?: string,
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
+    parseSafeMediaUrl(url);
 
     const tmpFile = randomTmpFilePath('youtube-video', 'mp4');
     await ensureDirForFile(tmpFile);
