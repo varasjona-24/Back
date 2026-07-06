@@ -14,6 +14,11 @@ import {
 
 import { MediaLibrary } from '../../domain/library/MediasLibrary.js';
 import { detectSourceOrigin } from './Detect_Source_Origin.js';
+import {
+  cleanupFile,
+  cleanupTempArtifact,
+  ensureDirForFile,
+} from '../../../../shared/fsSafety.js';
 
 export type DownloadMediaVariantInput = {
   mediaId: string;
@@ -154,17 +159,20 @@ private async getStream(
    * ====================================================== */
 
   private async ensureDir(filePath: string) {
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await ensureDirForFile(filePath);
   }
 
   private async saveStream(
     media: ResolvedMediaStream,
     filePath: string
   ) {
-    await pipeline(media.stream, fs.createWriteStream(filePath));
-
-    if (media.tmpFilePath) {
-      fs.promises.unlink(media.tmpFilePath).catch(() => {});
+    try {
+      await pipeline(media.stream, fs.createWriteStream(filePath));
+    } catch (error) {
+      await cleanupFile(filePath);
+      throw error;
+    } finally {
+      await cleanupTempArtifact(media.tmpFilePath);
     }
   }
 

@@ -26,10 +26,17 @@ import {
 } from '../domain/usecases/types.js';
 
 import { mediaLibrary } from '../domain/library/index.js';
+import { cleanupFile, isPathInsideRoot } from '../../../shared/fsSafety.js';
 
 export class MediaController {
   private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
+  private static readonly EXPIRED_VARIANT_SWEEP_MS = 60 * 1000;
   private static cleanupTimers = new Map<string, NodeJS.Timeout>();
+  private static expiredVariantSweepTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    MediaController.ensureExpiredVariantSweep();
+  }
 
   private getAdminToken(req: Request): string | null {
     const headerToken = req.header('x-admin-token');
@@ -408,7 +415,30 @@ export class MediaController {
     format: string,
     filePath: string
   ) {
-    fs.promises.unlink(filePath).catch(() => {});
+    void MediaController.cleanupVariantFile(filePath);
     mediaLibrary.removeVariant(mediaId, kind, format);
+  }
+
+  private static ensureExpiredVariantSweep() {
+    if (MediaController.expiredVariantSweepTimer) return;
+
+    const sweep = () => {
+      mediaLibrary.removeExpiredVariants(Date.now(), variant => {
+        void MediaController.cleanupVariantFile(variant.path);
+      });
+    };
+
+    sweep();
+    const timer = setInterval(sweep, MediaController.EXPIRED_VARIANT_SWEEP_MS);
+    timer.unref();
+    MediaController.expiredVariantSweepTimer = timer;
+  }
+
+  private static async cleanupVariantFile(filePath: string) {
+    const mediaRoot = path.resolve(process.env.MEDIA_PATH || 'media');
+    const resolved = path.resolve(filePath);
+    if (!isPathInsideRoot(mediaRoot, resolved)) return;
+
+    await cleanupFile(resolved);
   }
 }

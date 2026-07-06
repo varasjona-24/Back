@@ -1,12 +1,16 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 import {
   VideoSource,
   ResolvedMediaStream,
   DownloadQuality,
 } from '../../domain/usecases/types.js';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
+import {
+  cleanupFile,
+  ensureDirForFile,
+  randomTmpFilePath,
+} from '../../../../shared/fsSafety.js';
 
 export class YoutubeVideoSource implements VideoSource {
 
@@ -20,13 +24,8 @@ export class YoutubeVideoSource implements VideoSource {
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
 
-    const tmpDir = path.resolve('tmp');
-    await fs.promises.mkdir(tmpDir, { recursive: true });
-
-    const tmpFile = path.join(
-      tmpDir,
-      `${Date.now()}-video.mp4`
-    );
+    const tmpFile = randomTmpFilePath('youtube-video', 'mp4');
+    await ensureDirForFile(tmpFile);
 
     const maxHeight = this.mapQuality(quality);
     const format = [
@@ -50,18 +49,24 @@ export class YoutubeVideoSource implements VideoSource {
       stdio: ['ignore', 'inherit', 'inherit']
     });
 
-    await new Promise<void>((resolve, reject) => {
-      child.on('close', code => {
-        if (code === 0) resolve();
-        else reject(new Error(`yt-dlp exited with code ${code}`));
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.on('close', code => {
+          if (code === 0) resolve();
+          else reject(new Error(`yt-dlp exited with code ${code}`));
+        });
+        child.on('error', reject);
       });
-    });
+    } catch (error) {
+      await cleanupFile(tmpFile);
+      throw error;
+    }
 
-   return {
-  stream: fs.createReadStream(tmpFile),
-  mimeType: 'video/mp4',
-  tmpFilePath: tmpFile // ✅
-};
+    return {
+      stream: fs.createReadStream(tmpFile),
+      mimeType: 'video/mp4',
+      tmpFilePath: tmpFile // ✅
+    };
 
   }
 

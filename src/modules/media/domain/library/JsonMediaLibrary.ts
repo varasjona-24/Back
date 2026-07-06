@@ -111,6 +111,39 @@ export class JsonMediaLibrary implements MediaLibrary {
     this.save();
   }
 
+  removeExpiredVariants(
+    now: number,
+    onRemove?: (variant: MediaVariant, mediaId: string) => void
+  ): number {
+    let removed = 0;
+
+    for (const [mediaId, media] of this.items.entries()) {
+      const variants = media.variants ?? [];
+      if (!variants.length) continue;
+
+      const nextVariants: MediaVariant[] = [];
+      for (const variant of variants) {
+        if (variant.expiresAt && now >= variant.expiresAt) {
+          removed += 1;
+          onRemove?.(variant, mediaId);
+          continue;
+        }
+        nextVariants.push(variant);
+      }
+
+      if (nextVariants.length === variants.length) continue;
+
+      if (nextVariants.length === 0) {
+        this.items.delete(mediaId);
+      } else {
+        media.variants = nextVariants;
+      }
+    }
+
+    if (removed > 0) this.save();
+    return removed;
+  }
+
   hasVariant(mediaId: string, kind: string, format: string): boolean {
     return Boolean(this.getVariant(mediaId, kind, format));
   }

@@ -1,6 +1,5 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 //import { Readable } from 'stream';
 import {
   AudioSource,
@@ -10,6 +9,11 @@ import {
   DownloadQuality
 } from '../../domain/usecases/types.js';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
+import {
+  cleanupFile,
+  ensureDirForFile,
+  randomTmpFilePath,
+} from '../../../../shared/fsSafety.js';
 
 export class YoutubeAudioSource implements AudioSource {
 
@@ -22,61 +26,63 @@ export class YoutubeAudioSource implements AudioSource {
    * - Por defecto devuelve MP3 (ideal para móvil)
    * - Compatible con streaming y descarga
    */
- async getAudioStream(
-  url: string,
-  _range?: string,
-  format: AudioFormat = 'm4a',
-  quality: DownloadQuality = 'high'
- ): Promise<ResolvedMediaStream> {
-  const tmpDir = path.join(process.cwd(), 'tmp');
-  await fs.promises.mkdir(tmpDir, { recursive: true });
+  async getAudioStream(
+    url: string,
+    _range?: string,
+    format: AudioFormat = 'm4a',
+    quality: DownloadQuality = 'high'
+  ): Promise<ResolvedMediaStream> {
+    const tmpFilePath = randomTmpFilePath('youtube-audio', format);
+    await ensureDirForFile(tmpFilePath);
 
-  const tmpFilePath = path.join(tmpDir, `${Date.now()}-generic-audio.${format}`);
+    const audioQuality = this.mapQuality(quality);
+    const audioBitrate = this.mapBitrate(quality);
+    const ytDlpPath = await getYtDlpPath();
+    const extraArgs = await getYtDlpExtraArgs();
 
-  const audioQuality = this.mapQuality(quality);
-  const audioBitrate = this.mapBitrate(quality);
-  const ytDlpPath = await getYtDlpPath();
-  const extraArgs = await getYtDlpExtraArgs();
+    return new Promise((resolve, reject) => {
+      const child = spawn(ytDlpPath, [
+        ...extraArgs,
+        '-x',
+        '--no-playlist',
+        '--audio-format', format,
+        '--audio-quality', audioQuality,
+        '--postprocessor-args', `ffmpeg:-b:a ${audioBitrate}`,
+        '-o', tmpFilePath,
+        url
+      ]);
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(ytDlpPath, [
-      ...extraArgs,
-      '-x',
-      '--no-playlist',
-      '--audio-format', format,
-      '--audio-quality', audioQuality,
-      '--postprocessor-args', `ffmpeg:-b:a ${audioBitrate}`,
-      '-o', tmpFilePath,
-      url
-    ]);
+      let stderr = '';
+      child.stderr?.on('data', chunk => {
+        stderr += chunk.toString();
+      });
 
-    let stderr = '';
-    child.stderr?.on('data', chunk => {
-      stderr += chunk.toString();
-    });
+      child.on('close', code => {
+        if (code !== 0) {
+          const detail = stderr.trim();
+          cleanupFile(tmpFilePath);
+          return reject(
+            new Error(
+              detail
+                ? `yt-dlp failed to download audio: ${detail}`
+                : 'yt-dlp failed to download audio'
+            )
+          );
+        }
 
-    child.on('close', code => {
-      if (code !== 0) {
-        const detail = stderr.trim();
-        return reject(
-          new Error(
-            detail
-              ? `yt-dlp failed to download audio: ${detail}`
-              : 'yt-dlp failed to download audio'
-          )
-        );
-      }
+        resolve({
+          stream: fs.createReadStream(tmpFilePath),
+          mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/mp4',
+          tmpFilePath
+        });
+      });
 
-      resolve({
-        stream: fs.createReadStream(tmpFilePath),
-        mimeType: format === 'mp3' ? 'audio/mpeg' : 'audio/mp4',
-        tmpFilePath
+      child.on('error', error => {
+        cleanupFile(tmpFilePath);
+        reject(error);
       });
     });
-
-    child.on('error', reject);
-  });
-}
+  }
 
 
   /* ======================================================

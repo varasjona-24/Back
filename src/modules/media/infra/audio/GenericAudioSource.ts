@@ -1,6 +1,5 @@
 import { spawn } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 
 import type {
   AudioSource,
@@ -9,6 +8,11 @@ import type {
   DownloadQuality,
 } from '../../domain/usecases/types.js';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
+import {
+  cleanupFile,
+  ensureDirForFile,
+  randomTmpFilePath,
+} from '../../../../shared/fsSafety.js';
 
 export class GenericAudioSource implements AudioSource {
 
@@ -22,13 +26,8 @@ export class GenericAudioSource implements AudioSource {
     format: AudioFormat = 'm4a',
     quality: DownloadQuality = 'high'
   ): Promise<ResolvedMediaStream> {
-    const tmpDir = path.join(process.cwd(), 'tmp');
-    await fs.promises.mkdir(tmpDir, { recursive: true });
-
-    const tmpFilePath = path.join(
-      tmpDir,
-      `${Date.now()}-generic-audio.${format}`
-    );
+    const tmpFilePath = randomTmpFilePath('generic-audio', format);
+    await ensureDirForFile(tmpFilePath);
     const ytDlpPath = await getYtDlpPath();
     const extraArgs = await getYtDlpExtraArgs();
     const audioQuality = this.mapQuality(quality);
@@ -54,6 +53,7 @@ export class GenericAudioSource implements AudioSource {
       child.on('close', code => {
         if (code !== 0) {
           const detail = stderr.trim();
+          cleanupFile(tmpFilePath);
           return reject(
             new Error(
               detail
@@ -70,7 +70,10 @@ export class GenericAudioSource implements AudioSource {
         });
       });
 
-      child.on('error', reject);
+      child.on('error', error => {
+        cleanupFile(tmpFilePath);
+        reject(error);
+      });
     });
   }
 

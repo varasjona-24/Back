@@ -8,6 +8,7 @@ import type {
   DownloadQuality,
 } from '../../domain/usecases/types.js';
 import { getYtDlpExtraArgs, getYtDlpPath } from '../ytDlp.js';
+import { randomTmpFilePath } from '../../../../shared/fsSafety.js';
 
 function ensureDir(pth: string) {
   return fs.promises.mkdir(pth, { recursive: true });
@@ -64,9 +65,8 @@ export class GenericVideoSource implements VideoSource {
     const tmpDir = path.resolve('tmp');
     await ensureDir(tmpDir);
 
-    const token = Date.now();
-    const tmpFile = path.join(tmpDir, `${token}-generic-video.mp4`);
-    const ytdlpFile = path.join(tmpDir, `${token}-generic-video-download.mp4`);
+    const tmpFile = randomTmpFilePath('generic-video', 'mp4');
+    const ytdlpFile = randomTmpFilePath('generic-video-download', 'mp4');
 
     // 1) Intentar con yt-dlp
     try {
@@ -86,7 +86,13 @@ export class GenericVideoSource implements VideoSource {
       const { code, stderr } = await run(ytDlpPath, ytdlpArgs, { timeoutMs: 1000 * 60 * 8 });
 
       if (code === 0 && fs.existsSync(ytdlpFile)) {
-        await this.normalizeForMobile(ytdlpFile, tmpFile);
+        try {
+          await this.normalizeForMobile(ytdlpFile, tmpFile);
+        } catch (error) {
+          unlinkQuiet(ytdlpFile);
+          unlinkQuiet(tmpFile);
+          throw error;
+        }
         unlinkQuiet(ytdlpFile);
 
         return {
@@ -98,6 +104,7 @@ export class GenericVideoSource implements VideoSource {
 
       console.error('[GenericVideoSource] yt-dlp failed:', stderr.trim() || `exit code ${code}`);
     } catch (e) {
+      unlinkQuiet(ytdlpFile);
       console.error('[GenericVideoSource] yt-dlp error:', e);
     }
 

@@ -8,6 +8,7 @@ import type {
   DownloadQuality,
 } from '../../domain/usecases/types.js';
 import { getMegaApi } from '../mega/megaAuth.js';
+import { cleanupDir } from '../../../../shared/fsSafety.js';
 
 type MegaApiLike = object;
 
@@ -98,11 +99,16 @@ export class MegaVideoSource implements VideoSource {
     const megaFile = await loadMegaFile(url);
     const tmpFilePath = buildTmpFilePath(tmpDir, megaFile.name);
 
-    await pipeline(megaFile.download({}), fs.createWriteStream(tmpFilePath));
+    try {
+      await pipeline(megaFile.download({}), fs.createWriteStream(tmpFilePath));
+    } catch (error) {
+      await cleanupDir(tmpDir);
+      throw error;
+    }
 
     const stat = await fs.promises.stat(tmpFilePath);
     if (stat.size <= 0) {
-      unlinkQuiet(tmpFilePath);
+      await cleanupDir(tmpDir);
       throw new Error('Downloaded MEGA video file is empty');
     }
 

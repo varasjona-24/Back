@@ -50,6 +50,11 @@ export interface MediaLibrary {
     format: string
   ): void;
 
+  removeExpiredVariants(
+    now: number,
+    onRemove?: (variant: MediaVariant, mediaId: string) => void
+  ): number;
+
   hasVariant(
     mediaId: string,
     kind: string,
