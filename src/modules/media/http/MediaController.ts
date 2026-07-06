@@ -28,6 +28,7 @@ import {
 import { mediaLibrary } from '../domain/library/index.js';
 import { cleanupFile, isPathInsideRoot } from '../../../shared/fsSafety.js';
 import { isMegaUrl, parseSafeMediaUrl } from '../../../shared/urlSafety.js';
+import { ApiErrorCode, apiError, sendApiError } from '../../../shared/apiErrors.js';
 
 export class MediaController {
   private static readonly VARIANT_TTL_MS = 7 * 60 * 1000;
@@ -72,16 +73,32 @@ export class MediaController {
     const { url } = req.query;
 
     if (!url || typeof url !== 'string') {
-      return res.status(400).json({
-        error: 'Query param "url" is required',
-      });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message: 'Query param "url" is required.',
+          userMessage: 'URL requerida para reproducir audio.',
+          status: 400,
+          retryable: false,
+        })
+      );
     }
 
     try {
       parseSafeMediaUrl(url);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL';
-      return res.status(400).json({ error: message });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message,
+          userMessage: 'La URL no es válida o no está permitida.',
+          status: 400,
+          retryable: false,
+        })
+      );
     }
 
     try {
@@ -105,9 +122,16 @@ export class MediaController {
       console.error('[MediaController]', error);
 
       if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Failed to stream audio',
-        });
+        sendApiError(
+          res,
+          apiError({
+            code: 'MEDIA_DOWNLOAD_FAILED',
+            message: 'Failed to stream audio.',
+            userMessage: 'No se pudo reproducir el audio desde el backend.',
+            status: 500,
+            retryable: true,
+          })
+        );
       }
     }
   }
@@ -120,14 +144,30 @@ export class MediaController {
     const { url } = req.query;
 
     if (!url || typeof url !== 'string') {
-      return res.status(400).json({ error: 'url is required' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message: 'url is required.',
+          userMessage: 'URL requerida para resolver información.',
+          status: 400,
+        })
+      );
     }
 
     try {
       parseSafeMediaUrl(url);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL';
-      return res.status(400).json({ error: message });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message,
+          userMessage: 'La URL no es válida o no está permitida.',
+          status: 400,
+        })
+      );
     }
 
     try {
@@ -135,7 +175,16 @@ export class MediaController {
       const info = await useCase.execute(url);
       res.json(info);
     } catch (err) {
-      res.status(500).json({ error: 'Failed to resolve info' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_UNSUPPORTED_SOURCE',
+          message: err instanceof Error ? err.message : 'Failed to resolve info.',
+          userMessage: 'No se pudo resolver información del medio.',
+          status: 500,
+          retryable: true,
+        })
+      );
     }
   }
 
@@ -225,26 +274,54 @@ export class MediaController {
     const { url, kind, format, quality } = req.body;
 
     if (!url || !kind || !format) {
-      return res.status(400).json({
-        error: 'url, kind and format are required',
-      });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'url, kind and format are required.',
+          userMessage: 'Faltan datos para iniciar la descarga.',
+          status: 400,
+        })
+      );
     }
 
     if (!['audio', 'video'].includes(kind)) {
-      return res.status(400).json({
-        error: 'kind must be audio or video',
-      });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'kind must be audio or video.',
+          userMessage: 'Tipo de descarga inválido.',
+          status: 400,
+        })
+      );
     }
 
     if (typeof url !== 'string') {
-      return res.status(400).json({ error: 'url must be a string' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message: 'url must be a string.',
+          userMessage: 'URL inválida.',
+          status: 400,
+        })
+      );
     }
 
     try {
       parseSafeMediaUrl(url);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid URL';
-      return res.status(400).json({ error: message });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message,
+          userMessage: 'La URL no es válida o no está permitida.',
+          status: 400,
+        })
+      );
     }
 
     try {
@@ -280,21 +357,53 @@ export class MediaController {
         v === 'low' || v === 'medium' || v === 'high';
 
       if (!isMediaKind(kindStr)) {
-        return res.status(400).json({ error: 'kind must be audio or video' });
+        return sendApiError(
+          res,
+          apiError({
+            code: 'VALIDATION_ERROR',
+            message: 'kind must be audio or video.',
+            userMessage: 'Tipo de descarga inválido.',
+            status: 400,
+          })
+        );
       }
 
       if (kindStr === 'audio' && !isAudioFormat(formatStr)) {
-        return res
-          .status(400)
-          .json({ error: 'audio format must be mp3 or m4a' });
+        return sendApiError(
+          res,
+          apiError({
+            code: 'MEDIA_FORMAT_UNAVAILABLE',
+            message: 'audio format must be mp3 or m4a.',
+            userMessage: 'Formato de audio no disponible.',
+            status: 400,
+            details: { allowedFormats: ['mp3', 'm4a'] },
+          })
+        );
       }
 
       if (kindStr === 'video' && !isVideoFormat(formatStr)) {
-        return res.status(400).json({ error: 'video format must be mp4' });
+        return sendApiError(
+          res,
+          apiError({
+            code: 'MEDIA_FORMAT_UNAVAILABLE',
+            message: 'video format must be mp4.',
+            userMessage: 'Formato de video no disponible.',
+            status: 400,
+            details: { allowedFormats: ['mp4'] },
+          })
+        );
       }
 
       if (qualityStr && !isDownloadQuality(qualityStr)) {
-        return res.status(400).json({ error: 'quality must be low, medium, or high' });
+        return sendApiError(
+          res,
+          apiError({
+            code: 'VALIDATION_ERROR',
+            message: 'quality must be low, medium, or high.',
+            userMessage: 'Calidad de descarga inválida.',
+            status: 400,
+          })
+        );
       }
 
       // ✅ MegaVideoSource ANTES que GenericVideoSource
@@ -337,9 +446,18 @@ export class MediaController {
       });
     } catch (err: any) {
       console.error('[MediaController.download]', err);
-      return res.status(500).json({
-        error: err.message ?? 'Failed to download media',
-      });
+      const classified = this.classifyDownloadFailure(err);
+      return sendApiError(
+        res,
+        apiError({
+          code: classified.code,
+          message: err.message ?? 'Failed to download media.',
+          userMessage: classified.userMessage,
+          status: classified.status,
+          retryable: classified.retryable,
+          retryAfterSeconds: classified.retryAfterSeconds,
+        })
+      );
     }
   }
 
@@ -351,19 +469,48 @@ export class MediaController {
     const { mediaId, kind, format } = req.params;
 
     const variant = mediaLibrary.getVariant(mediaId, kind, format);
-    if (!variant) return res.status(404).json({ error: 'Variant not found' });
+    if (!variant) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_FILE_NOT_FOUND',
+          message: 'Variant not found.',
+          userMessage: 'La variante remota no existe o expiró.',
+          status: 404,
+          retryable: false,
+        })
+      );
+    }
 
     // ✅ Usa el path guardado tal cual (ya lo tienes en media-library.json)
     const filePath = path.resolve(variant.path);
 
     if (variant.expiresAt && Date.now() >= variant.expiresAt) {
       this.cleanupVariant(mediaId, kind, format, filePath);
-      return res.status(404).json({ error: 'File expired' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_VARIANT_EXPIRED',
+          message: 'File expired.',
+          userMessage: 'La variante remota expiró.',
+          status: 404,
+          retryable: false,
+        })
+      );
     }
 
     if (!fs.existsSync(filePath)) {
       mediaLibrary.removeVariant(mediaId, kind, format);
-      return res.status(404).json({ error: 'File not found on disk' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_FILE_NOT_FOUND',
+          message: 'File not found on disk.',
+          userMessage: 'El archivo remoto ya no está disponible.',
+          status: 404,
+          retryable: false,
+        })
+      );
     }
 
     const stat = fs.statSync(filePath);
@@ -464,5 +611,77 @@ export class MediaController {
     if (!isPathInsideRoot(mediaRoot, resolved)) return;
 
     await cleanupFile(resolved);
+  }
+
+  private classifyDownloadFailure(error: unknown): {
+    code: ApiErrorCode;
+    userMessage: string;
+    status: number;
+    retryable: boolean;
+    retryAfterSeconds?: number;
+  } {
+    const raw = error instanceof Error ? error.message : String(error ?? '');
+    const message = raw.toLowerCase();
+
+    if (
+      message.includes('not a bot') ||
+      message.includes('sign in') ||
+      message.includes('cookie') ||
+      message.includes('confirm your age')
+    ) {
+      return {
+        code: 'MEDIA_COOKIES_REQUIRED',
+        userMessage: 'La fuente requiere cookies o iniciar sesión para descargar.',
+        status: 409,
+        retryable: false,
+      };
+    }
+
+    if (
+      message.includes('drm') ||
+      message.includes('protected') ||
+      message.includes('copyright') ||
+      message.includes('encrypted')
+    ) {
+      return {
+        code: 'MEDIA_PROTECTED_CONTENT',
+        userMessage: 'Este contenido está protegido y no se puede descargar.',
+        status: 409,
+        retryable: false,
+      };
+    }
+
+    if (
+      message.includes('requested format is not available') ||
+      message.includes('format is not available') ||
+      message.includes('no video formats') ||
+      message.includes('no audio formats') ||
+      message.includes('no source available')
+    ) {
+      return {
+        code: 'MEDIA_FORMAT_UNAVAILABLE',
+        userMessage: 'No hay un formato compatible disponible para esta fuente.',
+        status: 422,
+        retryable: false,
+      };
+    }
+
+    if (message.includes('timeout') || message.includes('timed out')) {
+      return {
+        code: 'MEDIA_DOWNLOAD_TIMEOUT',
+        userMessage: 'La descarga tardó demasiado en el backend.',
+        status: 504,
+        retryable: true,
+        retryAfterSeconds: 60,
+      };
+    }
+
+    return {
+      code: 'MEDIA_DOWNLOAD_FAILED',
+      userMessage: 'No se pudo completar la descarga en el backend.',
+      status: 500,
+      retryable: true,
+      retryAfterSeconds: 60,
+    };
   }
 }

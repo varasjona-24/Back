@@ -8,6 +8,7 @@ import {
   KaraokeSessionService,
   karaokeSessionService,
 } from '../domain/KaraokeSessionService.js';
+import { apiError, normalizeApiError, sendApiError } from '../../../shared/apiErrors.js';
 
 type KaraokeJobApiResult = {
   model: string;
@@ -65,21 +66,45 @@ export class KaraokeController {
         job: this.toApiJob(job),
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'No se pudo crear job de karaoke';
-      return res.status(400).json({ error: message });
+      return sendApiError(
+        res,
+        normalizeApiError(error, {
+          code: 'VALIDATION_ERROR',
+          message: 'Could not create karaoke job.',
+          userMessage: 'No se pudo crear job de karaoke.',
+          status: 400,
+          retryable: false,
+        })
+      );
     }
   }
 
   getJob(req: Request, res: Response) {
     const jobId = req.params.jobId?.trim();
     if (!jobId) {
-      return res.status(400).json({ error: 'jobId es requerido' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'jobId is required.',
+          userMessage: 'jobId es requerido.',
+          status: 400,
+        })
+      );
     }
 
     const job = this.jobs.getJob(jobId);
     if (!job) {
-      return res.status(404).json({ error: 'Job no encontrado' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_SESSION_EXPIRED',
+          message: 'Karaoke job not found.',
+          userMessage: 'La sesión remota no existe o expiró.',
+          status: 404,
+          retryable: false,
+        })
+      );
     }
 
     return res.json({ job: this.toApiJob(job) });
@@ -87,7 +112,16 @@ export class KaraokeController {
 
   createSession(req: Request, res: Response) {
     if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-      return res.status(400).json({ error: 'Body binario requerido (audio fuente).' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_INVALID_AUDIO_BYTES',
+          message: 'Binary source audio body is required.',
+          userMessage: 'Body binario requerido con audio fuente.',
+          status: 400,
+          retryable: false,
+        })
+      );
     }
 
     try {
@@ -98,8 +132,7 @@ export class KaraokeController {
       const mode = this.parseMode(this.stringQuery(req.query.mode));
       const filename =
         this.stringQuery(req.query.filename) ??
-        this.fileNameFromHeader(req.header('x-filename')) ??
-        'source.wav';
+        this.fileNameFromHeader(req.header('x-filename'));
 
       const session = this.sessions.createSessionFromUpload({
         sourceBytes: req.body,
@@ -118,21 +151,45 @@ export class KaraokeController {
         session: this.toApiSession(session),
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'No se pudo crear sesión remota';
-      return res.status(400).json({ error: message });
+      return sendApiError(
+        res,
+        normalizeApiError(error, {
+          code: 'VALIDATION_ERROR',
+          message: 'Could not create remote karaoke session.',
+          userMessage: 'No se pudo crear sesión remota.',
+          status: 400,
+          retryable: false,
+        })
+      );
     }
   }
 
   getSession(req: Request, res: Response) {
     const sessionId = req.params.sessionId?.trim();
     if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId es requerido' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'sessionId is required.',
+          userMessage: 'sessionId es requerido.',
+          status: 400,
+        })
+      );
     }
 
     const session = this.sessions.getSession(sessionId);
     if (!session) {
-      return res.status(404).json({ error: 'Sesión no encontrada' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_SESSION_EXPIRED',
+          message: 'Karaoke session not found.',
+          userMessage: 'La sesión remota no existe o expiró.',
+          status: 404,
+          retryable: false,
+        })
+      );
     }
 
     return res.json({ session: this.toApiSession(session) });
@@ -141,12 +198,30 @@ export class KaraokeController {
   sessionInstrumental(req: Request, res: Response) {
     const sessionId = req.params.sessionId?.trim();
     if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId es requerido' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'sessionId is required.',
+          userMessage: 'sessionId es requerido.',
+          status: 400,
+        })
+      );
     }
 
     const filePath = this.sessions.getInstrumentalPath(sessionId);
     if (!filePath) {
-      return res.status(404).json({ error: 'Instrumental no disponible' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_OUTPUT_NOT_READY',
+          message: 'Instrumental output is not available.',
+          userMessage: 'El instrumental aún no está disponible.',
+          status: 404,
+          retryable: true,
+          retryAfterSeconds: 3,
+        })
+      );
     }
 
     this.sessions.markInstrumentalServed(sessionId);
@@ -156,12 +231,30 @@ export class KaraokeController {
   sessionSpatial8d(req: Request, res: Response) {
     const sessionId = req.params.sessionId?.trim();
     if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId es requerido' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'sessionId is required.',
+          userMessage: 'sessionId es requerido.',
+          status: 400,
+        })
+      );
     }
 
     const filePath = this.sessions.getSpatial8dPath(sessionId);
     if (!filePath) {
-      return res.status(404).json({ error: 'Audio 8D no disponible' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_OUTPUT_NOT_READY',
+          message: 'Spatial 8D output is not available.',
+          userMessage: 'El audio 8D aún no está disponible.',
+          status: 404,
+          retryable: true,
+          retryAfterSeconds: 3,
+        })
+      );
     }
 
     this.sessions.markSpatial8dServed(sessionId);
@@ -171,12 +264,30 @@ export class KaraokeController {
   instrumental(req: Request, res: Response) {
     const jobId = req.params.jobId?.trim();
     if (!jobId) {
-      return res.status(400).json({ error: 'jobId es requerido' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'jobId is required.',
+          userMessage: 'jobId es requerido.',
+          status: 400,
+        })
+      );
     }
 
     const filePath = this.jobs.getInstrumentalPath(jobId);
     if (!filePath) {
-      return res.status(404).json({ error: 'Instrumental no disponible' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_OUTPUT_NOT_READY',
+          message: 'Instrumental output is not available.',
+          userMessage: 'El instrumental aún no está disponible.',
+          status: 404,
+          retryable: true,
+          retryAfterSeconds: 3,
+        })
+      );
     }
 
     const resolved = path.resolve(filePath);
@@ -227,6 +338,9 @@ export class KaraokeController {
       input: session.input,
       separatorModel: session.separatorModel,
       error: session.error,
+      errorCode: session.errorCode,
+      retryable: session.retryable,
+      retryAfterSeconds: session.retryAfterSeconds,
       result: {
         mode: session.mode,
         instrumentalUrl: session.instrumentalPath
@@ -244,7 +358,16 @@ export class KaraokeController {
   private streamAudioFile(req: Request, res: Response, filePath: string) {
     const resolved = path.resolve(filePath);
     if (!fs.existsSync(resolved)) {
-      return res.status(404).json({ error: 'Archivo de audio no existe' });
+      return sendApiError(
+        res,
+        apiError({
+          code: 'KARAOKE_OUTPUT_EXPIRED',
+          message: 'Audio output file does not exist.',
+          userMessage: 'El archivo generado ya no está disponible.',
+          status: 404,
+          retryable: false,
+        })
+      );
     }
 
     const stat = fs.statSync(resolved);

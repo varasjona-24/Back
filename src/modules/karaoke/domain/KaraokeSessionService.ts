@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
+import { ApiErrorCode, apiError } from '../../../shared/apiErrors.js';
 
 export type KaraokeSessionStatus =
   | 'separating'
@@ -38,6 +39,9 @@ export type KaraokeSession = {
   mixPath?: string;
   separatorModel: string;
   error?: string;
+  errorCode?: ApiErrorCode;
+  retryable?: boolean;
+  retryAfterSeconds?: number;
 };
 
 type CreateSessionInput = {
@@ -71,7 +75,22 @@ type KaraokeSessionServiceOptions = {
   sessionsTtlMs?: number;
   cleanupIntervalMs?: number;
   maxSessions?: number;
+  maxActiveSessions?: number;
 };
+
+type DetectedAudioUpload = {
+  ext: string;
+  mime: string;
+};
+
+type KaraokeSessionFailure = {
+  code: ApiErrorCode;
+  userMessage: string;
+  retryable: boolean;
+  retryAfterSeconds?: number;
+};
+
+const ALLOWED_SOURCE_EXTENSIONS = new Set(['wav', 'mp3', 'm4a', 'aac', 'flac']);
 
 export class KaraokeSessionService {
   private readonly sessions = new Map<string, KaraokeSession>();
@@ -89,6 +108,7 @@ export class KaraokeSessionService {
   private readonly instrumentalTtlMs: number;
   private readonly sessionsTtlMs: number;
   private readonly maxSessions: number;
+  private readonly maxActiveSessions: number;
   private readonly cleanupInterval: NodeJS.Timeout;
   private readonly instrumentalExpiryTimers = new Map<string, NodeJS.Timeout>();
 
@@ -134,6 +154,9 @@ export class KaraokeSessionService {
     this.maxSessions =
       options.maxSessions ??
       this.readEnvPositiveInt('KARAOKE_SESSIONS_MAX', 120);
+    this.maxActiveSessions =
+      options.maxActiveSessions ??
+      this.readEnvPositiveInt('KARAOKE_ACTIVE_SESSIONS_MAX', 3);
 
     fs.mkdirSync(this.sessionsRoot, { recursive: true });
 
@@ -146,16 +169,27 @@ export class KaraokeSessionService {
 
   createSessionFromUpload(input: CreateSessionInput): KaraokeSession {
     if (!input.sourceBytes.length) {
-      throw new Error('Audio fuente vacío');
+      throw apiError({
+        code: 'KARAOKE_INVALID_AUDIO_BYTES',
+        message: 'Source audio is empty.',
+        userMessage: 'El audio fuente está vacío.',
+        status: 400,
+        retryable: false,
+      });
     }
+
+    this.assertActiveSessionQuota();
+    const sourceAudio = this.validateSourceUpload(
+      input.sourceBytes,
+      input.sourceFilename
+    );
 
     const sessionId = uuidv4();
     const now = Date.now();
     const sessionDir = this.getSessionDir(sessionId);
     fs.mkdirSync(sessionDir, { recursive: true });
 
-    const sourceExt = this.extensionFromName(input.sourceFilename, 'audio');
-    const sourcePath = path.join(sessionDir, `source.${sourceExt}`);
+    const sourcePath = path.join(sessionDir, `source.${sourceAudio.ext}`);
     fs.writeFileSync(sourcePath, input.sourceBytes);
 
     const mode = this.normalizeMode(input.mode);
@@ -470,18 +504,16 @@ export class KaraokeSessionService {
         error: undefined,
       });
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : session.mode === 'spatial8d'
-          ? 'Error al procesar audio 8D'
-          : 'Error al separar instrumental';
+      const failure = this.classifySeparationFailure(error, session.mode);
       this.patchSession(sessionId, {
         status: 'failed',
         progress: 1,
-        message,
+        message: failure.userMessage,
         updatedAt: Date.now(),
-        error: message,
+        error: failure.userMessage,
+        errorCode: failure.code,
+        retryable: failure.retryable,
+        retryAfterSeconds: failure.retryAfterSeconds,
       });
     } finally {
       clearInterval(heartbeat);
@@ -884,6 +916,35 @@ export class KaraokeSessionService {
     return Math.min(2.5, Math.max(0.0, raw));
   }
 
+  private classifySeparationFailure(
+    error: unknown,
+    mode: KaraokeVariantMode
+  ): KaraokeSessionFailure {
+    const raw = error instanceof Error ? error.message : String(error);
+    const lower = raw.toLowerCase();
+    const noun = mode === 'spatial8d' ? 'audio 8D' : 'instrumental';
+
+    if (lower.includes('timeout') || lower.includes('sin actividad')) {
+      return {
+        code: 'KARAOKE_PROCESS_TIMEOUT',
+        userMessage:
+          `El backend tardó demasiado procesando el ${noun}. Reintenta con un audio más corto o vuelve a intentarlo en unos minutos.`,
+        retryable: true,
+        retryAfterSeconds: 120,
+      };
+    }
+
+    return {
+      code: 'KARAOKE_PROCESS_FAILED',
+      userMessage:
+        mode === 'spatial8d'
+          ? 'No se pudo generar el audio 8D en el backend.'
+          : 'No se pudo separar el instrumental en el backend.',
+      retryable: true,
+      retryAfterSeconds: 60,
+    };
+  }
+
   private cleanupExpiredSessions(): void {
     const now = Date.now();
     for (const [id, session] of this.sessions.entries()) {
@@ -1009,15 +1070,157 @@ export class KaraokeSessionService {
     return raw === 'spatial8d' ? 'spatial8d' : 'instrumental';
   }
 
-  private extensionFromName(name: string | undefined, mode: 'audio' | 'voice'): string {
-    const fallback = mode === 'voice' ? 'm4a' : 'wav';
-    if (!name) return fallback;
+  private assertActiveSessionQuota(): void {
+    const active = Array.from(this.sessions.values()).filter(session =>
+      session.status === 'separating' || session.status === 'mixing'
+    );
+
+    if (active.length >= this.maxActiveSessions) {
+      throw apiError({
+        code: 'KARAOKE_BACKEND_BUSY',
+        message: `Active karaoke session limit reached: ${active.length}.`,
+        userMessage:
+          'El backend está procesando varias sesiones. Reintenta en unos minutos.',
+        status: 429,
+        retryable: true,
+        retryAfterSeconds: 120,
+        details: {
+          activeSessions: active.length,
+          maxActiveSessions: this.maxActiveSessions,
+        },
+      });
+    }
+  }
+
+  private validateSourceUpload(
+    bytes: Buffer,
+    filename: string | undefined
+  ): DetectedAudioUpload {
+    const detected = this.detectAudioUpload(bytes);
+    if (!detected) {
+      throw apiError({
+        code: 'KARAOKE_INVALID_AUDIO_BYTES',
+        message: 'Uploaded file does not match a supported audio signature.',
+        userMessage: 'El archivo subido no parece ser un audio compatible.',
+        status: 400,
+        retryable: false,
+        details: {
+          allowedFormats: Array.from(ALLOWED_SOURCE_EXTENSIONS),
+        },
+      });
+    }
+
+    const rawExt = this.extensionFromName(filename, 'audio', '');
+    const ext = rawExt || detected.ext;
+
+    if (!ALLOWED_SOURCE_EXTENSIONS.has(ext)) {
+      throw apiError({
+        code: 'KARAOKE_UNSUPPORTED_AUDIO_FORMAT',
+        message: `Unsupported karaoke source audio extension: ${ext || 'unknown'}.`,
+        userMessage:
+          'Este archivo no es compatible. Usa WAV, MP3, M4A, AAC o FLAC.',
+        status: 400,
+        retryable: false,
+        details: {
+          extension: ext || null,
+          allowedFormats: Array.from(ALLOWED_SOURCE_EXTENSIONS),
+        },
+      });
+    }
+
+    if (detected.ext !== ext) {
+      const compatible =
+        (ext === 'm4a' && detected.ext === 'aac') ||
+        (ext === 'aac' && detected.ext === 'm4a');
+      if (!compatible) {
+        throw apiError({
+          code: 'KARAOKE_AUDIO_EXTENSION_MISMATCH',
+          message: `Audio extension .${ext} does not match detected content ${detected.mime}.`,
+          userMessage:
+            'La extensión del archivo no coincide con el tipo de audio detectado.',
+          status: 400,
+          retryable: false,
+          details: {
+            extension: ext,
+            detectedFormat: detected.ext,
+            detectedMime: detected.mime,
+          },
+        });
+      }
+    }
+
+    return {
+      ext,
+      mime: detected.mime,
+    };
+  }
+
+  private detectAudioUpload(bytes: Buffer): DetectedAudioUpload | null {
+    if (bytes.length < 4) return null;
+
+    if (
+      bytes.length >= 12 &&
+      bytes.toString('ascii', 0, 4) === 'RIFF' &&
+      bytes.toString('ascii', 8, 12) === 'WAVE'
+    ) {
+      return { ext: 'wav', mime: 'audio/wav' };
+    }
+
+    if (bytes.toString('ascii', 0, 4) === 'fLaC') {
+      return { ext: 'flac', mime: 'audio/flac' };
+    }
+
+    if (this.looksLikeMp4Audio(bytes)) {
+      return { ext: 'm4a', mime: 'audio/mp4' };
+    }
+
+    if (this.looksLikeAacAdts(bytes)) {
+      return { ext: 'aac', mime: 'audio/aac' };
+    }
+
+    if (bytes.toString('ascii', 0, 3) === 'ID3' || this.looksLikeMp3Frame(bytes)) {
+      return { ext: 'mp3', mime: 'audio/mpeg' };
+    }
+
+    return null;
+  }
+
+  private looksLikeMp3Frame(bytes: Buffer): boolean {
+    if (bytes.length < 2) return false;
+    return bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+  }
+
+  private looksLikeMp4Audio(bytes: Buffer): boolean {
+    if (bytes.length < 12) return false;
+    const box = bytes.toString('ascii', 4, 8);
+    if (box !== 'ftyp') return false;
+
+    const brandWindow = bytes.toString(
+      'ascii',
+      8,
+      Math.min(bytes.length, 32)
+    );
+    return /M4A|mp4|isom|iso2|3gp/i.test(brandWindow);
+  }
+
+  private looksLikeAacAdts(bytes: Buffer): boolean {
+    if (bytes.length < 2) return false;
+    return bytes[0] === 0xff && (bytes[1] & 0xf0) === 0xf0;
+  }
+
+  private extensionFromName(
+    name: string | undefined,
+    mode: 'audio' | 'voice',
+    fallback?: string
+  ): string {
+    const fallbackExt = fallback ?? (mode === 'voice' ? 'm4a' : 'wav');
+    if (!name) return fallbackExt;
     const clean = name.split('?')[0].trim();
     const dot = clean.lastIndexOf('.');
-    if (dot < 0 || dot >= clean.length - 1) return fallback;
+    if (dot < 0 || dot >= clean.length - 1) return fallbackExt;
     const ext = clean.substring(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!ext) return fallback;
-    if (ext.length > 8) return fallback;
+    if (!ext) return fallbackExt;
+    if (ext.length > 8) return fallbackExt;
     return ext;
   }
 
