@@ -9,6 +9,8 @@ export interface YoutubePlaylistEntry {
   duration: number;
   thumbnail: string | null;
   index: number;
+  isAvailable: boolean;
+  availabilityReason: string | null;
 }
 
 export interface YoutubePlaylistResolvedInfo {
@@ -28,6 +30,9 @@ type RawYoutubePlaylistEntry = {
   thumbnail?: unknown;
   thumbnails?: unknown;
   playlist_index?: unknown;
+  availability?: unknown;
+  availability_reason?: unknown;
+  live_status?: unknown;
 };
 
 function pickThumbnail(raw: RawYoutubePlaylistEntry): string | null {
@@ -58,6 +63,46 @@ function buildEntryUrl(raw: RawYoutubePlaylistEntry): string {
   const id = typeof raw.id === 'string' ? raw.id.trim() : directUrl;
   if (!id) throw new Error('Playlist entry does not include a playable id');
   return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+}
+
+function availabilityStatus(raw: RawYoutubePlaylistEntry): {
+  isAvailable: boolean;
+  reason: string | null;
+} {
+  const availability = typeof raw.availability === 'string'
+    ? raw.availability.trim().toLowerCase()
+    : '';
+  const explicitReason = typeof raw.availability_reason === 'string'
+    ? raw.availability_reason.trim()
+    : '';
+  const liveStatus = typeof raw.live_status === 'string'
+    ? raw.live_status.trim().toLowerCase()
+    : '';
+  const title = typeof raw.title === 'string' ? raw.title.trim().toLowerCase() : '';
+
+  if (
+    availability === 'private' ||
+    availability === 'needs_auth' ||
+    availability === 'premium_only' ||
+    availability === 'subscriber_only'
+  ) {
+    return { isAvailable: false, reason: explicitReason || 'private' };
+  }
+
+  if (
+    availability === 'deleted' ||
+    availability === 'unavailable' ||
+    liveStatus === 'was_live' ||
+    title === '[private video]' ||
+    title === 'private video' ||
+    title === '[deleted video]' ||
+    title === 'deleted video' ||
+    title.includes('video unavailable')
+  ) {
+    return { isAvailable: false, reason: explicitReason || 'unavailable' };
+  }
+
+  return { isAvailable: true, reason: explicitReason || null };
 }
 
 export class YoutubePlaylistSource {
@@ -120,6 +165,7 @@ export class YoutubePlaylistSource {
             const index = typeof raw.playlist_index === 'number'
               ? raw.playlist_index
               : i + 1;
+            const availability = availabilityStatus(raw);
             entries.push({
               url: entryUrl,
               title: typeof raw.title === 'string' && raw.title.trim()
@@ -134,6 +180,8 @@ export class YoutubePlaylistSource {
                 : 0,
               thumbnail: pickThumbnail(raw),
               index,
+              isAvailable: availability.isAvailable,
+              availabilityReason: availability.reason,
             });
           }
 

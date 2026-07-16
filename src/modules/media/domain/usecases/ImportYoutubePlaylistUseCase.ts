@@ -83,11 +83,11 @@ export class ImportYoutubePlaylistUseCase {
         .filter(url => url.length > 0)
     );
     const entries = selectedUrlSet.size > 0
-      ? playlistInfo.entries.filter(entry => selectedUrlSet.has(entry.url))
-      : playlistInfo.entries;
+      ? playlistInfo.entries.filter(entry => selectedUrlSet.has(entry.url) && entry.isAvailable)
+      : playlistInfo.entries.filter(entry => entry.isAvailable);
 
     if (entries.length === 0) {
-      throw new Error('No selected playlist entries were found');
+      throw new Error('No available playlist entries were selected');
     }
 
     const playlist = this.playlists.create(
