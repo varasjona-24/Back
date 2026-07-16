@@ -34,6 +34,11 @@ router.post('/download', (req, res) =>
   controller.download(req, res)
 );
 
+// 🎼 Resolver playlist externa sin descargar
+router.get('/playlist/resolve', (req, res) =>
+  controller.resolvePlaylist(req, res)
+);
+
 // 🎼 Importar playlist externa como playlist interna
 router.post('/playlist/import', (req, res) =>
   controller.importPlaylist(req, res)

@@ -14,6 +14,7 @@ import { YoutubeVideoSource } from '../infra/video/YoutubeVideoSource.js';
 import { GenericVideoSource } from '../infra/video/GenericVideoSurce.js';
 import { GenericAudioSource } from '../infra/audio/GenericAudioSource.js';
 import { storeYtDlpCookies } from '../infra/ytDlp.js';
+import { YoutubePlaylistSource } from '../infra/info/YoutubePlaylistSource.js';
 
 // ✅ NEW: MEGA
 import { MegaVideoSource } from '../infra/video/MegaVideoSources.js';
@@ -462,8 +463,75 @@ export class MediaController {
     }
   }
 
+  async resolvePlaylist(req: Request, res: Response) {
+    const { url, maxItems } = req.query;
+
+    if (!url || typeof url !== 'string') {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message: 'url is required.',
+          userMessage: 'URL requerida para resolver la playlist.',
+          status: 400,
+        })
+      );
+    }
+
+    try {
+      parseSafeMediaUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL';
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message,
+          userMessage: 'La URL no es válida o no está permitida.',
+          status: 400,
+        })
+      );
+    }
+
+    const maxItemsNumber = maxItems == null ? 100 : Number(maxItems);
+    if (!Number.isFinite(maxItemsNumber) || maxItemsNumber < 1) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'maxItems must be a positive number.',
+          userMessage: 'La cantidad de canciones a leer no es válida.',
+          status: 400,
+        })
+      );
+    }
+
+    try {
+      const source = new YoutubePlaylistSource();
+      const result = await source.resolve(url, maxItemsNumber);
+      return res.json({
+        name: result.title,
+        thumbnail: result.thumbnail,
+        total: result.entries.length,
+        entries: result.entries,
+      });
+    } catch (err: any) {
+      console.error('[MediaController.resolvePlaylist]', err);
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_UNSUPPORTED_SOURCE',
+          message: err.message ?? 'Failed to resolve playlist.',
+          userMessage: 'No se pudo leer la playlist.',
+          status: 500,
+          retryable: true,
+        })
+      );
+    }
+  }
+
   async importPlaylist(req: Request, res: Response) {
-    const { url, kind, format, quality, maxItems, playlistName } = req.body ?? {};
+    const { url, kind, format, quality, maxItems, playlistName, selectedUrls } = req.body ?? {};
 
     if (!url || !kind || !format) {
       return sendApiError(
@@ -590,6 +658,9 @@ export class MediaController {
         quality: qualityStr ? (qualityStr as DownloadQuality) : undefined,
         maxItems: maxItemsNumber,
         playlistName: typeof playlistName === 'string' ? playlistName : undefined,
+        selectedUrls: Array.isArray(selectedUrls)
+          ? selectedUrls.filter((value): value is string => typeof value === 'string')
+          : undefined,
       });
 
       return res.status(201).json(result);

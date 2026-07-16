@@ -27,6 +27,7 @@ export type ImportYoutubePlaylistInput = {
   quality?: DownloadQuality;
   maxItems?: number;
   playlistName?: string;
+  selectedUrls?: string[];
 };
 
 export type ImportedPlaylistItem = {
@@ -76,6 +77,19 @@ export class ImportYoutubePlaylistUseCase {
 
     const maxItems = Math.max(1, Math.min(100, Math.floor(input.maxItems ?? 50)));
     const playlistInfo = await this.playlistSource.resolve(input.url, maxItems);
+    const selectedUrlSet = new Set(
+      (input.selectedUrls ?? [])
+        .map(url => url.trim())
+        .filter(url => url.length > 0)
+    );
+    const entries = selectedUrlSet.size > 0
+      ? playlistInfo.entries.filter(entry => selectedUrlSet.has(entry.url))
+      : playlistInfo.entries;
+
+    if (entries.length === 0) {
+      throw new Error('No selected playlist entries were found');
+    }
+
     const playlist = this.playlists.create(
       input.playlistName?.trim() || playlistInfo.title
     );
@@ -83,7 +97,7 @@ export class ImportYoutubePlaylistUseCase {
     const importedItems: ImportedPlaylistItem[] = [];
     const failures: FailedPlaylistItem[] = [];
 
-    for (const entry of playlistInfo.entries) {
+    for (const entry of entries) {
       try {
         const media = this.ensureMedia(entry);
         const result = await downloader.execute({
@@ -124,7 +138,7 @@ export class ImportYoutubePlaylistUseCase {
       playlist: updatedPlaylist,
       name: updatedPlaylist.name,
       thumbnail: playlistInfo.thumbnail,
-      total: playlistInfo.entries.length,
+      total: entries.length,
       imported: importedItems.length,
       failed: failures.length,
       items: importedItems,
