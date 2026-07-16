@@ -34,6 +34,11 @@ router.post('/download', (req, res) =>
   controller.download(req, res)
 );
 
+// 🎼 Importar playlist externa como playlist interna
+router.post('/playlist/import', (req, res) =>
+  controller.importPlaylist(req, res)
+);
+
 // 📁 SERVIR ARCHIVO (ESTE ES EL QUE FALTABA)
 router.get('/file/:mediaId/:kind/:format', (req, res) =>
   controller.file(req, res)

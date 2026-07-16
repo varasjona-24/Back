@@ -5,6 +5,7 @@ import path from 'path';
 import { ResolveMedia } from '../domain/usecases/Resolve_Media.js';
 import { ResolveMediaInfo } from '../domain/usecases/ResolveMediaInfo.js';
 import { DownloadMediaVariantUseCase } from '../domain/usecases/Download_Media_Variant_Use_Case.js';
+import { ImportYoutubePlaylistUseCase } from '../domain/usecases/ImportYoutubePlaylistUseCase.js';
 
 import { YoutubeAudioSource } from '../infra/audio/YoutubeAudioSource.js';
 import { MegaAudioSource } from '../infra/audio/MegaAudioSource.js';
@@ -452,6 +453,154 @@ export class MediaController {
         apiError({
           code: classified.code,
           message: err.message ?? 'Failed to download media.',
+          userMessage: classified.userMessage,
+          status: classified.status,
+          retryable: classified.retryable,
+          retryAfterSeconds: classified.retryAfterSeconds,
+        })
+      );
+    }
+  }
+
+  async importPlaylist(req: Request, res: Response) {
+    const { url, kind, format, quality, maxItems, playlistName } = req.body ?? {};
+
+    if (!url || !kind || !format) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'url, kind and format are required.',
+          userMessage: 'Faltan datos para importar la playlist.',
+          status: 400,
+        })
+      );
+    }
+
+    if (typeof url !== 'string') {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message: 'url must be a string.',
+          userMessage: 'URL inválida.',
+          status: 400,
+        })
+      );
+    }
+
+    try {
+      parseSafeMediaUrl(url);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid URL';
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_INVALID_URL',
+          message,
+          userMessage: 'La URL no es válida o no está permitida.',
+          status: 400,
+        })
+      );
+    }
+
+    const kindStr = String(kind);
+    const formatStr = String(format);
+    const qualityStr = quality != null ? String(quality) : '';
+    const maxItemsNumber = maxItems == null ? 50 : Number(maxItems);
+
+    const isMediaKind = (v: string): v is MediaKind =>
+      v === 'audio' || v === 'video';
+    const isAudioFormat = (v: string): v is AudioFormat =>
+      v === 'mp3' || v === 'm4a';
+    const isVideoFormat = (v: string): v is VideoFormat => v === 'mp4';
+    const isDownloadQuality = (v: string): v is DownloadQuality =>
+      v === 'low' || v === 'medium' || v === 'high';
+
+    if (!isMediaKind(kindStr)) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'kind must be audio or video.',
+          userMessage: 'Tipo de importación inválido.',
+          status: 400,
+        })
+      );
+    }
+
+    if (kindStr === 'audio' && !isAudioFormat(formatStr)) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_FORMAT_UNAVAILABLE',
+          message: 'audio format must be mp3 or m4a.',
+          userMessage: 'Formato de audio no disponible.',
+          status: 400,
+          details: { allowedFormats: ['mp3', 'm4a'] },
+        })
+      );
+    }
+
+    if (kindStr === 'video' && !isVideoFormat(formatStr)) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'MEDIA_FORMAT_UNAVAILABLE',
+          message: 'video format must be mp4.',
+          userMessage: 'Formato de video no disponible.',
+          status: 400,
+          details: { allowedFormats: ['mp4'] },
+        })
+      );
+    }
+
+    if (qualityStr && !isDownloadQuality(qualityStr)) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'quality must be low, medium, or high.',
+          userMessage: 'Calidad de descarga inválida.',
+          status: 400,
+        })
+      );
+    }
+
+    if (!Number.isFinite(maxItemsNumber) || maxItemsNumber < 1) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'maxItems must be a positive number.',
+          userMessage: 'La cantidad de canciones a importar no es válida.',
+          status: 400,
+        })
+      );
+    }
+
+    try {
+      const useCase = new ImportYoutubePlaylistUseCase();
+      const result = await useCase.execute({
+        url,
+        kind: kindStr,
+        format: kindStr === 'audio'
+          ? (formatStr as AudioFormat)
+          : (formatStr as VideoFormat),
+        quality: qualityStr ? (qualityStr as DownloadQuality) : undefined,
+        maxItems: maxItemsNumber,
+        playlistName: typeof playlistName === 'string' ? playlistName : undefined,
+      });
+
+      return res.status(201).json(result);
+    } catch (err: any) {
+      console.error('[MediaController.importPlaylist]', err);
+      const classified = this.classifyDownloadFailure(err);
+      return sendApiError(
+        res,
+        apiError({
+          code: classified.code,
+          message: err.message ?? 'Failed to import playlist.',
           userMessage: classified.userMessage,
           status: classified.status,
           retryable: classified.retryable,
