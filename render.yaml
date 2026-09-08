@@ -11,6 +11,10 @@ services:
         value: "22"
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
+      - key: YTDLP_POT_PROVIDER_ENABLED
+        value: "1"
+      - key: YTDLP_POT_PROVIDER_STRICT_BUILD
+        value: "0"
       - key: MEDIA_PATH
         value: media
       - key: KARAOKE_INSTRUMENTAL_TTL_MS

@@ -22,6 +22,14 @@ function getCookiesPath(): string {
   return defaultPath;
 }
 
+function getPotProviderUrl(): string | null {
+  if (process.env.YTDLP_POT_PROVIDER_ENABLED?.trim() !== '1') {
+    return null;
+  }
+  const configured = process.env.YTDLP_POT_PROVIDER_URL?.trim();
+  return configured || null;
+}
+
 export async function storeYtDlpCookies(content: string): Promise<string> {
   const cookiesPath = getCookiesPath();
   await fs.promises.mkdir(path.dirname(cookiesPath), { recursive: true });
@@ -139,6 +147,20 @@ export async function getYtDlpPath(): Promise<string> {
 
 export async function getYtDlpExtraArgs(): Promise<string[]> {
   const args: string[] = ['--js-runtimes', 'node'];
+  const potProviderUrl = getPotProviderUrl();
+  const pluginDir = path.join(process.cwd(), 'bin', 'yt-dlp-plugins');
+  const pluginPath = path.join(pluginDir, 'bgutil-ytdlp-pot-provider.zip');
+
+  if (potProviderUrl && fs.existsSync(pluginPath)) {
+    args.push(
+      '--plugin-dirs',
+      pluginDir,
+      '--extractor-args',
+      `youtubepot-bgutilhttp:base_url=${potProviderUrl}`,
+      '--extractor-args',
+      'youtube:player_client=mweb,default',
+    );
+  }
 
   const cookiesPath = getCookiesPath();
   if (fs.existsSync(cookiesPath)) {

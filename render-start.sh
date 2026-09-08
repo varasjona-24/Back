@@ -52,5 +52,17 @@ if [ "${KARAOKE_DEMUCS_ENABLED:-1}" = "1" ]; then
   fi
 fi
 
+if [ "${YTDLP_POT_PROVIDER_ENABLED:-0}" = "1" ]; then
+  POT_PROVIDER_MAIN="$APP_DIR/.ytdlp-pot-provider/server/build/main.js"
+  if [ -f "$POT_PROVIDER_MAIN" ]; then
+    export YTDLP_POT_PROVIDER_URL="${YTDLP_POT_PROVIDER_URL:-http://127.0.0.1:4416}"
+    echo "[render-start] starting yt-dlp PO Token provider at $YTDLP_POT_PROVIDER_URL"
+    mkdir -p "$APP_DIR/tmp"
+    node "$POT_PROVIDER_MAIN" >"$APP_DIR/tmp/ytdlp-pot-provider.log" 2>&1 &
+  else
+    echo "[render-start] warning: PO Token provider is enabled but was not built"
+  fi
+fi
+
 cd "$APP_DIR"
 exec node dist/server.js

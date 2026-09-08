@@ -15,6 +15,8 @@ info() {
 }
 
 YTDLP_REQUIRED="${YTDLP_REQUIRED:-0}"
+YTDLP_POT_PROVIDER_ENABLED="${YTDLP_POT_PROVIDER_ENABLED:-0}"
+YTDLP_POT_PROVIDER_STRICT_BUILD="${YTDLP_POT_PROVIDER_STRICT_BUILD:-0}"
 INSTALL_DEMUCS="${INSTALL_DEMUCS:-0}"
 DEMUCS_STRICT_BUILD="${DEMUCS_STRICT_BUILD:-0}"
 
@@ -39,6 +41,44 @@ else
     fi
     warn "yt-dlp refresh failed; continuing build"
   fi
+fi
+
+install_ytdlp_pot_provider() {
+  if [ "$YTDLP_POT_PROVIDER_ENABLED" != "1" ]; then
+    info "skipping yt-dlp PO Token provider (YTDLP_POT_PROVIDER_ENABLED=$YTDLP_POT_PROVIDER_ENABLED)"
+    return 0
+  fi
+
+  POT_VERSION="${YTDLP_POT_PROVIDER_VERSION:-2.0.0}"
+  POT_ROOT="$APP_DIR/.ytdlp-pot-provider"
+  POT_PLUGIN_DIR="$APP_DIR/bin/yt-dlp-plugins"
+  POT_PLUGIN_PATH="$POT_PLUGIN_DIR/bgutil-ytdlp-pot-provider.zip"
+  POT_SOURCE_URL="https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/$POT_VERSION.tar.gz"
+  POT_PLUGIN_URL="https://github.com/Brainicism/bgutil-ytdlp-pot-provider/releases/download/$POT_VERSION/bgutil-ytdlp-pot-provider.zip"
+
+  info "installing yt-dlp PO Token provider $POT_VERSION"
+  rm -rf "$POT_ROOT"
+  mkdir -p "$POT_ROOT" "$POT_PLUGIN_DIR"
+
+  curl -fsSL "$POT_SOURCE_URL" | tar -xz --strip-components=1 -C "$POT_ROOT" || return 1
+  curl -fsSL "$POT_PLUGIN_URL" -o "$POT_PLUGIN_PATH" || return 1
+
+  (
+    cd "$POT_ROOT/server"
+    npm ci
+    npx tsc
+  ) || return 1
+
+  info "yt-dlp PO Token provider installed"
+  return 0
+}
+
+if ! install_ytdlp_pot_provider; then
+  if [ "$YTDLP_POT_PROVIDER_STRICT_BUILD" = "1" ]; then
+    echo "[render-build] PO Token provider setup failed and YTDLP_POT_PROVIDER_STRICT_BUILD=1" >&2
+    exit 1
+  fi
+  warn "PO Token provider setup failed; YouTube downloads will use yt-dlp defaults"
 fi
 
 info "building typescript"
