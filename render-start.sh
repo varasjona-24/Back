@@ -52,7 +52,7 @@ if [ "${KARAOKE_DEMUCS_ENABLED:-1}" = "1" ]; then
   fi
 fi
 
-if [ "${YTDLP_POT_PROVIDER_ENABLED:-0}" = "1" ]; then
+if [ "${YTDLP_POT_PROVIDER_ENABLED:-1}" = "1" ]; then
   POT_PROVIDER_MAIN="$APP_DIR/.ytdlp-pot-provider/server/build/main.js"
   if [ -f "$POT_PROVIDER_MAIN" ]; then
     export YTDLP_POT_PROVIDER_URL="${YTDLP_POT_PROVIDER_URL:-http://127.0.0.1:4416}"

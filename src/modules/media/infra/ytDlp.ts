@@ -23,7 +23,8 @@ function getCookiesPath(): string {
 }
 
 function getPotProviderUrl(): string | null {
-  if (process.env.YTDLP_POT_PROVIDER_ENABLED?.trim() !== '1') {
+  const enabled = process.env.YTDLP_POT_PROVIDER_ENABLED?.trim() ?? '1';
+  if (enabled !== '1') {
     return null;
   }
   const configured = process.env.YTDLP_POT_PROVIDER_URL?.trim();
