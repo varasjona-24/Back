@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import https from 'https';
+import { spawn } from 'child_process';
 
 let cachedPath: string | null = null;
 let pending: Promise<string> | null = null;
 let cachedCookiesPath: string | null = null;
+let managedBinaryUpdate: Promise<void> | null = null;
+let managedBinaryWasChecked = false;
 
 function getCookiesPath(): string {
   const envPath = process.env.YTDLP_COOKIES_PATH?.trim();
@@ -50,12 +53,62 @@ function downloadFile(url: string, filePath: string): Promise<void> {
   });
 }
 
+function shouldAutoUpdateManagedBinary(): boolean {
+  return process.env.YTDLP_AUTO_UPDATE?.trim().toLowerCase() !== 'false';
+}
+
+async function updateManagedBinaryOnce(binaryPath: string): Promise<void> {
+  if (!shouldAutoUpdateManagedBinary() || managedBinaryWasChecked) return;
+  if (managedBinaryUpdate) return managedBinaryUpdate;
+
+  managedBinaryUpdate = new Promise<void>((resolve) => {
+    const child = spawn(binaryPath, ['-U'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let output = '';
+    const timeout = setTimeout(() => {
+      child.kill('SIGTERM');
+    }, 45_000);
+
+    child.stdout?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr?.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      console.warn('[yt-dlp] Automatic update could not start:', error.message);
+      resolve();
+    });
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        console.info(`[yt-dlp] ${output.trim() || 'Update check completed.'}`);
+      } else {
+        console.warn(
+          `[yt-dlp] Automatic update failed (exit ${code ?? 'unknown'}); using the existing binary. ${output.trim()}`,
+        );
+      }
+      resolve();
+    });
+  }).finally(() => {
+    managedBinaryWasChecked = true;
+    managedBinaryUpdate = null;
+  });
+
+  return managedBinaryUpdate;
+}
+
 export async function getYtDlpPath(): Promise<string> {
   if (process.env.YTDLP_PATH?.trim()) {
     return process.env.YTDLP_PATH.trim();
   }
 
-  if (cachedPath) return cachedPath;
+  if (cachedPath) {
+    if (managedBinaryUpdate) await managedBinaryUpdate;
+    return cachedPath;
+  }
   if (pending) return pending;
 
   const binDir = path.join(process.cwd(), 'bin');
@@ -63,6 +116,7 @@ export async function getYtDlpPath(): Promise<string> {
 
   if (fs.existsSync(binPath)) {
     cachedPath = binPath;
+    await updateManagedBinaryOnce(binPath);
     return binPath;
   }
 
@@ -76,6 +130,7 @@ export async function getYtDlpPath(): Promise<string> {
     await fs.promises.chmod(tmpPath, 0o755);
 
     cachedPath = tmpPath;
+    managedBinaryWasChecked = true;
     return tmpPath;
   })();
 
