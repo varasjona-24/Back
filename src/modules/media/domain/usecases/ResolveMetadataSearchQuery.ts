@@ -58,7 +58,14 @@ const animeThemeMarkers = [
 const featuredCreditPattern = /\s+(?:feat(?:\.|uring)?|ft\.?)\s+[^\s].*$/i;
 
 const animePresentationMarkers = [
-  /\b(?:traducid[ao]|sub(?:tit(?:le|ulo)s?)?|lyrics?|romaji|espa[nñ]ol|english)\b/i,
+  /\b(?:traducid[ao]|sub\.?(?=\s|$)|sub(?:tit(?:le|ulo)s?)?|lyrics?|romaji|espa[nñ]ol|english|amv)\b/i,
+];
+
+const animeThemeContextParts = [
+  /^full$/i,
+  /^version$/i,
+  /^tema$/i,
+  /^theme$/i,
 ];
 
 function cleanInput(value: string): string {
@@ -160,6 +167,46 @@ function isAnimePresentation(value: string): boolean {
   return animePresentationMarkers.some((pattern) => pattern.test(value));
 }
 
+function isAnimeThemeContextPart(value: string): boolean {
+  return animeThemeContextParts.some((pattern) => pattern.test(value));
+}
+
+function extractAnimeThemeFromArtistField(
+  title: string,
+  artist: string,
+  removedArtifacts: Set<string>,
+): EmbeddedCredits | undefined {
+  if (!hasAnimeThemeContext(artist) || !isAnimePresentation(title)) {
+    return undefined;
+  }
+
+  const marker = animeThemeMarkers
+    .map((pattern) => ({ match: pattern.exec(artist) }))
+    .find((entry) => entry.match != null)?.match;
+  if (!marker) return undefined;
+
+  const parts = artist
+    .slice(marker.index + marker[0].length)
+    .replace(/^[\s.#:|—–-]+/, '')
+    .split(/\s+(?:[-|—–])\s+/)
+    .map(cleanInput)
+    .filter(
+      (part) =>
+        part &&
+        !isAnimePresentation(part) &&
+        !isAnimeThemeContextPart(part),
+    );
+  const themeTitle = parts[parts.length - 1];
+  if (!themeTitle) return undefined;
+
+  removedArtifacts.add('anime theme context in artist field');
+  return {
+    title: themeTitle,
+    clearArtist: true,
+    matched: true,
+  };
+}
+
 function extractAnimeThemeParts(value: string): EmbeddedCredits | undefined {
   const marker = animeThemeMarkers
     .map((pattern) => ({ match: pattern.exec(value) }))
@@ -200,6 +247,12 @@ function extractAnimeCredits(
   artist: string,
   removedArtifacts: Set<string>,
 ): EmbeddedCredits {
+  const artistFieldTheme = extractAnimeThemeFromArtistField(
+    title,
+    artist,
+    removedArtifacts,
+  );
+  if (artistFieldTheme) return artistFieldTheme;
   if (!hasAnimeThemeContext(title)) return { title };
 
   const withoutSourceSuffix = removeInlineSourceSuffix(title, removedArtifacts);
