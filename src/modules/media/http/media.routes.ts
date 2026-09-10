@@ -14,6 +14,11 @@ router.get('/resolve-info', (req, res) =>
   controller.resolveInfo(req, res)
 );
 
+// 🧹 Normalizar metadata local para búsquedas externas, sin persistirla.
+router.post('/metadata/resolve-query', (req, res) =>
+  controller.resolveMetadataQuery(req, res)
+);
+
 // 📚 Biblioteca
 router.get('/library', (req, res) =>
   controller.library(req, res)

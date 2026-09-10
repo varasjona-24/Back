@@ -4,6 +4,7 @@ import path from 'path';
 
 import { ResolveMedia } from '../domain/usecases/Resolve_Media.js';
 import { ResolveMediaInfo } from '../domain/usecases/ResolveMediaInfo.js';
+import { ResolveMetadataSearchQuery } from '../domain/usecases/ResolveMetadataSearchQuery.js';
 import { DownloadMediaVariantUseCase } from '../domain/usecases/Download_Media_Variant_Use_Case.js';
 import { ImportYoutubePlaylistUseCase } from '../domain/usecases/ImportYoutubePlaylistUseCase.js';
 
@@ -188,6 +189,36 @@ export class MediaController {
         })
       );
     }
+  }
+
+  async resolveMetadataQuery(req: Request, res: Response) {
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const artist = typeof req.body?.artist === 'string' ? req.body.artist.trim() : '';
+    const rawDuration = req.body?.durationSeconds;
+    const durationSeconds =
+      typeof rawDuration === 'number'
+        ? rawDuration
+        : typeof rawDuration === 'string'
+          ? Number(rawDuration)
+          : undefined;
+
+    if (!title) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'title is required.',
+          userMessage: 'Se requiere el título para normalizar la búsqueda.',
+          status: 400,
+          retryable: false,
+        }),
+      );
+    }
+
+    const resolver = new ResolveMetadataSearchQuery();
+    const result = await resolver.execute({ title, artist, durationSeconds });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json(result);
   }
 
   /* ======================================================
