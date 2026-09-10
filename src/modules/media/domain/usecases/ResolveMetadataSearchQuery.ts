@@ -31,17 +31,23 @@ const acceptedScoreMargin = 0.075;
 
 const sourceMarkers = [
   /\bofficial\b/i,
-  /\b(audio|video|visuali[sz]er)\b/i,
+  /\b(audio|video|visuali[sz]er|m\/v|music video|official audio)\b/i,
   /\blyrics?\b/i,
-  /\blyric video\b/i,
-  /\b(letra|letras|subtit(?:le|ulo)s?)\b/i,
+  /\b(lyric video|color(?:\s|-)?coded|romanized)\b/i,
+  /\b(letra|letras|subtit(?:le|ulo)s?|eng(?:lish)?\s+sub(?:titles?)?)\b/i,
+  /\b(dance practice|choreography|performance video)\b/i,
   /\b(soundcloud|youtube|spotify|apple music|tiktok|vevo)\b/i,
   /\b(provided to youtube|topic|full song|hq|hd|4k)\b/i,
 ];
 
 const labelMarkers = [
   /\b(entertainment|records?|music|labels?|soundcloud|vevo)\b/i,
-  /\bhybe\b/i,
+  /\b(hybe|smtown|jyp|yg)\b/i,
+  /vevo$/i,
+];
+
+const musicalVersionMarkers = [
+  /\b(remaster(?:ed)?|live|acoustic|instrumental|sped\s*up|slowed|nightcore)\b/i,
 ];
 
 function cleanInput(value: string): string {
@@ -143,6 +149,37 @@ function extractEmbeddedCredits(
   return { title: embeddedTitle, artist: embeddedArtist };
 }
 
+function isLikelyMusicalVersion(value: string): boolean {
+  return musicalVersionMarkers.some((pattern) => pattern.test(value));
+}
+
+function extractDelimitedCredits(
+  title: string,
+  artist: string,
+  removedArtifacts: Set<string>,
+): EmbeddedCredits {
+  if (!isSourceArtifact(artist, { allowLabel: true })) return { title };
+
+  const separator = /\s+(?:[-|—–])\s+/;
+  const firstSeparator = separator.exec(title);
+  if (!firstSeparator || firstSeparator.index <= 0) return { title };
+
+  const embeddedArtist = cleanInput(title.slice(0, firstSeparator.index));
+  const embeddedTitle = cleanInput(
+    title.slice(firstSeparator.index + firstSeparator[0].length),
+  );
+  if (
+    !embeddedArtist ||
+    !embeddedTitle ||
+    isLikelyMusicalVersion(embeddedTitle)
+  ) {
+    return { title };
+  }
+
+  removedArtifacts.add(`embedded artist: ${embeddedArtist}`);
+  return { title: embeddedTitle, artist: embeddedArtist };
+}
+
 function comparable(value: string): string {
   return value
     .normalize('NFKD')
@@ -228,13 +265,20 @@ export class ResolveMetadataSearchQuery {
     const normalizedArtist = normalizeField(artist, removedArtifacts, {
       allowLabel: true,
     }) || artist;
-    const embeddedCredits = extractEmbeddedCredits(
+    const quotedCredits = extractEmbeddedCredits(
       normalizedTitle,
       normalizedArtist,
       removedArtifacts,
     );
-    const resolvedTitle = embeddedCredits.title || normalizedTitle;
-    const resolvedArtist = embeddedCredits.artist || normalizedArtist;
+    const delimitedCredits = quotedCredits.artist
+      ? quotedCredits
+      : extractDelimitedCredits(
+          quotedCredits.title,
+          normalizedArtist,
+          removedArtifacts,
+        );
+    const resolvedTitle = delimitedCredits.title || normalizedTitle;
+    const resolvedArtist = delimitedCredits.artist || normalizedArtist;
     const changedCharacters =
       Math.max(0, title.length - resolvedTitle.length) +
       Math.max(0, artist.length - resolvedArtist.length);
