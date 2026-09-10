@@ -2,6 +2,7 @@ import type { ErrorRequestHandler, Request, Response } from 'express';
 
 export type ApiErrorCode =
   | 'UNKNOWN_ERROR'
+  | 'UPSTREAM_UNAVAILABLE'
   | 'VALIDATION_ERROR'
   | 'MEDIA_INVALID_URL'
   | 'MEDIA_UNSUPPORTED_SOURCE'
