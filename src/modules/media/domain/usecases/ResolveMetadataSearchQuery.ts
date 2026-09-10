@@ -55,6 +55,10 @@ const animeThemeMarkers = [
   /\b(?:opening|ending)\s+theme\b/i,
 ];
 
+const animePresentationMarkers = [
+  /\b(?:traducid[ao]|sub(?:tit(?:le|ulo)s?)?|lyrics?|romaji|espa[nñ]ol|english)\b/i,
+];
+
 function cleanInput(value: string): string {
   return value
     .normalize('NFKC')
@@ -150,6 +154,41 @@ function cleanExtractedArtist(value: string): string | undefined {
   return cleaned;
 }
 
+function isAnimePresentation(value: string): boolean {
+  return animePresentationMarkers.some((pattern) => pattern.test(value));
+}
+
+function extractAnimeThemeParts(value: string): EmbeddedCredits | undefined {
+  const marker = animeThemeMarkers
+    .map((pattern) => ({ match: pattern.exec(value) }))
+    .find((entry) => entry.match != null)?.match;
+  if (!marker) return undefined;
+
+  const afterMarker = value
+    .slice(marker.index + marker[0].length)
+    .replace(/^[\s#:|—–-]+/, '')
+    .trim();
+  const byMatch = /^(.+?)\s+\bby\b\s+(.+)$/i.exec(afterMarker);
+  if (byMatch) {
+    const themeTitle = cleanInput(byMatch[1]);
+    const extractedArtist = cleanExtractedArtist(byMatch[2]);
+    if (themeTitle && extractedArtist) {
+      return { title: themeTitle, artist: extractedArtist, matched: true };
+    }
+  }
+
+  const parts = afterMarker
+    .split(/\s+(?:[-|—–])\s+/)
+    .map(cleanInput)
+    .filter((part) => part && !isAnimePresentation(part));
+  if (parts.length < 2) return undefined;
+
+  const themeTitle = parts[0];
+  const extractedArtist = cleanExtractedArtist(parts[1]);
+  if (!themeTitle || !extractedArtist) return undefined;
+  return { title: themeTitle, artist: extractedArtist, matched: true };
+}
+
 function extractAnimeCredits(
   title: string,
   artist: string,
@@ -162,6 +201,12 @@ function extractAnimeCredits(
     withoutSourceSuffix,
   );
   if (quotedMatch) {
+    const embeddedTheme = extractAnimeThemeParts(quotedMatch[1]);
+    if (embeddedTheme) {
+      removedArtifacts.add('anime theme context');
+      return embeddedTheme;
+    }
+
     const themeTitle = cleanInput(quotedMatch[1]);
     const trailing = withoutSourceSuffix.slice(
       quotedMatch.index + quotedMatch[0].length,
@@ -184,33 +229,10 @@ function extractAnimeCredits(
     }
   }
 
-  const marker = animeThemeMarkers
-    .map((pattern) => ({ match: pattern.exec(withoutSourceSuffix) }))
-    .find((entry) => entry.match != null)?.match;
-  if (!marker) return { title };
-
-  const afterMarker = withoutSourceSuffix
-    .slice(marker.index + marker[0].length)
-    .replace(/^[\s#:|—–-]+/, '')
-    .trim();
-  const byMatch = /^(.+?)\s+\bby\b\s+(.+)$/i.exec(afterMarker);
-  if (byMatch) {
-    const themeTitle = cleanInput(byMatch[1]);
-    const extractedArtist = cleanExtractedArtist(byMatch[2]);
-    if (themeTitle && extractedArtist) {
-      removedArtifacts.add('anime theme context');
-      return { title: themeTitle, artist: extractedArtist, matched: true };
-    }
-  }
-
-  const parts = afterMarker.split(/\s+(?:[-|—–])\s+/);
-  if (parts.length >= 2) {
-    const themeTitle = cleanInput(parts[0]);
-    const extractedArtist = cleanExtractedArtist(parts[1]);
-    if (themeTitle && extractedArtist) {
-      removedArtifacts.add('anime theme context');
-      return { title: themeTitle, artist: extractedArtist, matched: true };
-    }
+  const extractedTheme = extractAnimeThemeParts(withoutSourceSuffix);
+  if (extractedTheme) {
+    removedArtifacts.add('anime theme context');
+    return extractedTheme;
   }
   return { title };
 }
