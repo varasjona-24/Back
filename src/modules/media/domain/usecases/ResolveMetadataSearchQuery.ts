@@ -50,6 +50,11 @@ const musicalVersionMarkers = [
   /\b(remaster(?:ed)?|live|acoustic|instrumental|sped\s*up|slowed|nightcore)\b/i,
 ];
 
+const animeThemeMarkers = [
+  /\b(?:op(?:ening)?|ed(?:ding)?)\s*#?\d{0,2}\b/i,
+  /\b(?:opening|ending)\s+theme\b/i,
+];
+
 function cleanInput(value: string): string {
   return value
     .normalize('NFKC')
@@ -126,7 +131,89 @@ function removeInlineSourceSuffix(
 type EmbeddedCredits = {
   title: string;
   artist?: string;
+  clearArtist?: boolean;
+  matched?: boolean;
 };
+
+function hasAnimeThemeContext(value: string): boolean {
+  return animeThemeMarkers.some((pattern) => pattern.test(value));
+}
+
+function cleanExtractedArtist(value: string): string | undefined {
+  const withoutSourceSuffix = removeInlineSourceSuffix(value, new Set<string>());
+  const cleaned = normalizeField(withoutSourceSuffix, new Set<string>(), {
+    allowLabel: true,
+  });
+  if (!cleaned || isSourceArtifact(cleaned, { allowLabel: true })) {
+    return undefined;
+  }
+  return cleaned;
+}
+
+function extractAnimeCredits(
+  title: string,
+  artist: string,
+  removedArtifacts: Set<string>,
+): EmbeddedCredits {
+  if (!hasAnimeThemeContext(title)) return { title };
+
+  const withoutSourceSuffix = removeInlineSourceSuffix(title, removedArtifacts);
+  const quotedMatch = /['\u2018\u2019\u201c\u201d「『]([^'\u2018\u2019\u201c\u201d」』]{1,160})['\u2018\u2019\u201c\u201d」』]/.exec(
+    withoutSourceSuffix,
+  );
+  if (quotedMatch) {
+    const themeTitle = cleanInput(quotedMatch[1]);
+    const trailing = withoutSourceSuffix.slice(
+      quotedMatch.index + quotedMatch[0].length,
+    );
+    const trailingArtist = /\bby\b\s+(.+)$/i.exec(trailing)?.[1];
+    const extractedArtist = trailingArtist
+      ? cleanExtractedArtist(trailingArtist)
+      : undefined;
+    if (themeTitle) {
+      removedArtifacts.add('anime theme context');
+      return {
+        title: themeTitle,
+        ...(extractedArtist
+          ? { artist: extractedArtist }
+          : isSourceArtifact(artist, { allowLabel: true })
+          ? { clearArtist: true }
+          : { artist }),
+        matched: true,
+      };
+    }
+  }
+
+  const marker = animeThemeMarkers
+    .map((pattern) => ({ match: pattern.exec(withoutSourceSuffix) }))
+    .find((entry) => entry.match != null)?.match;
+  if (!marker) return { title };
+
+  const afterMarker = withoutSourceSuffix
+    .slice(marker.index + marker[0].length)
+    .replace(/^[\s#:|—–-]+/, '')
+    .trim();
+  const byMatch = /^(.+?)\s+\bby\b\s+(.+)$/i.exec(afterMarker);
+  if (byMatch) {
+    const themeTitle = cleanInput(byMatch[1]);
+    const extractedArtist = cleanExtractedArtist(byMatch[2]);
+    if (themeTitle && extractedArtist) {
+      removedArtifacts.add('anime theme context');
+      return { title: themeTitle, artist: extractedArtist, matched: true };
+    }
+  }
+
+  const parts = afterMarker.split(/\s+(?:[-|—–])\s+/);
+  if (parts.length >= 2) {
+    const themeTitle = cleanInput(parts[0]);
+    const extractedArtist = cleanExtractedArtist(parts[1]);
+    if (themeTitle && extractedArtist) {
+      removedArtifacts.add('anime theme context');
+      return { title: themeTitle, artist: extractedArtist, matched: true };
+    }
+  }
+  return { title };
+}
 
 function extractEmbeddedCredits(
   title: string,
@@ -265,12 +352,19 @@ export class ResolveMetadataSearchQuery {
     const normalizedArtist = normalizeField(artist, removedArtifacts, {
       allowLabel: true,
     }) || artist;
-    const quotedCredits = extractEmbeddedCredits(
+    const animeCredits = extractAnimeCredits(
       normalizedTitle,
       normalizedArtist,
       removedArtifacts,
     );
-    const delimitedCredits = quotedCredits.artist
+    const quotedCredits = animeCredits.matched
+      ? animeCredits
+      : extractEmbeddedCredits(
+          normalizedTitle,
+          normalizedArtist,
+          removedArtifacts,
+        );
+    const delimitedCredits = quotedCredits.matched || quotedCredits.artist
       ? quotedCredits
       : extractDelimitedCredits(
           quotedCredits.title,
@@ -278,7 +372,9 @@ export class ResolveMetadataSearchQuery {
           removedArtifacts,
         );
     const resolvedTitle = delimitedCredits.title || normalizedTitle;
-    const resolvedArtist = delimitedCredits.artist || normalizedArtist;
+    const resolvedArtist = delimitedCredits.clearArtist
+      ? ''
+      : delimitedCredits.artist || normalizedArtist;
     const changedCharacters =
       Math.max(0, title.length - resolvedTitle.length) +
       Math.max(0, artist.length - resolvedArtist.length);
