@@ -234,6 +234,43 @@ export class MediaController {
     return res.json({ ...result, suggestions, suggestionsAvailable });
   }
 
+  async resolveMetadataArtistCountry(req: Request, res: Response) {
+    const artistId = typeof req.body?.artistId === 'string'
+      ? req.body.artistId.trim()
+      : '';
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(artistId)) {
+      return sendApiError(
+        res,
+        apiError({
+          code: 'VALIDATION_ERROR',
+          message: 'artistId must be a MusicBrainz identifier.',
+          userMessage: 'El artista seleccionado no tiene un identificador válido.',
+          status: 400,
+          retryable: false,
+        }),
+      );
+    }
+
+    try {
+      const source = new MusicBrainzMetadataSearchSource();
+      const countryCode = await source.resolveArtistCountry(artistId);
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json({ countryCode });
+    } catch (error) {
+      console.warn('[MediaController.artistCountry] MusicBrainz unavailable', error);
+      return sendApiError(
+        res,
+        apiError({
+          code: 'UPSTREAM_UNAVAILABLE',
+          message: 'MusicBrainz artist lookup is temporarily unavailable.',
+          userMessage: 'No se pudo consultar el país del artista ahora.',
+          status: 503,
+          retryable: true,
+        }),
+      );
+    }
+  }
+
   /* ======================================================
    * MEDIA LIBRARY (YA EXISTE – NO SE TOCA)
    * ====================================================== */

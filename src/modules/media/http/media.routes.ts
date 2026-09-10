@@ -19,6 +19,10 @@ router.post('/metadata/resolve-query', (req, res) =>
   controller.resolveMetadataQuery(req, res)
 );
 
+router.post('/metadata/artist-country', (req, res) =>
+  controller.resolveMetadataArtistCountry(req, res)
+);
+
 // 📚 Biblioteca
 router.get('/library', (req, res) =>
   controller.library(req, res)
