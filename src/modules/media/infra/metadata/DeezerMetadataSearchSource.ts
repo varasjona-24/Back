@@ -89,6 +89,6 @@ export class DeezerMetadataSearchSource {
   }
 
   private quote(value: string): string {
-    return `"${value.replaceAll('"', ' ')}"`;
+    return `"${value.replace(/"/g, ' ')}"`;
   }
 }
