@@ -40,7 +40,8 @@ const sourceMarkers = [
 ];
 
 const labelMarkers = [
-  /\b(entertainment|records?|music|label|soundcloud|vevo)\b/i,
+  /\b(entertainment|records?|music|labels?|soundcloud|vevo)\b/i,
+  /\bhybe\b/i,
 ];
 
 function cleanInput(value: string): string {
@@ -97,6 +98,49 @@ function normalizeField(
     options,
   );
   return cleanInput(withoutTrailing.replace(/\s+[-|—–:]\s*$/, ''));
+}
+
+function removeInlineSourceSuffix(
+  value: string,
+  removedArtifacts: Set<string>,
+): string {
+  const match = sourceMarkers
+    .map((pattern) => ({ pattern, match: pattern.exec(value) }))
+    .filter((entry): entry is { pattern: RegExp; match: RegExpExecArray } =>
+      entry.match != null,
+    )
+    .sort((left, right) => left.match.index - right.match.index)[0];
+  if (!match || match.match.index <= 0) return value;
+
+  const suffix = value.slice(match.match.index).trim();
+  if (suffix) removedArtifacts.add(suffix);
+  return value.slice(0, match.match.index).trim();
+}
+
+type EmbeddedCredits = {
+  title: string;
+  artist?: string;
+};
+
+function extractEmbeddedCredits(
+  title: string,
+  artist: string,
+  removedArtifacts: Set<string>,
+): EmbeddedCredits {
+  const withoutSourceSuffix = removeInlineSourceSuffix(title, removedArtifacts);
+  const match = /^(.{1,100}?)\s+['\u2018\u2019\u201c\u201d]([^'\u2018\u2019\u201c\u201d]{1,160})['\u2018\u2019\u201c\u201d]/.exec(
+    withoutSourceSuffix,
+  );
+  if (!match) return { title: withoutSourceSuffix };
+
+  const embeddedArtist = cleanInput(match[1]);
+  const embeddedTitle = cleanInput(match[2]);
+  if (!embeddedArtist || !embeddedTitle || !isSourceArtifact(artist, { allowLabel: true })) {
+    return { title: withoutSourceSuffix };
+  }
+
+  removedArtifacts.add(`embedded artist: ${embeddedArtist}`);
+  return { title: embeddedTitle, artist: embeddedArtist };
 }
 
 function comparable(value: string): string {
@@ -184,9 +228,16 @@ export class ResolveMetadataSearchQuery {
     const normalizedArtist = normalizeField(artist, removedArtifacts, {
       allowLabel: true,
     }) || artist;
+    const embeddedCredits = extractEmbeddedCredits(
+      normalizedTitle,
+      normalizedArtist,
+      removedArtifacts,
+    );
+    const resolvedTitle = embeddedCredits.title || normalizedTitle;
+    const resolvedArtist = embeddedCredits.artist || normalizedArtist;
     const changedCharacters =
-      Math.max(0, title.length - normalizedTitle.length) +
-      Math.max(0, artist.length - normalizedArtist.length);
+      Math.max(0, title.length - resolvedTitle.length) +
+      Math.max(0, artist.length - resolvedArtist.length);
     const originalLength = Math.max(1, title.length + artist.length);
     const confidence = Math.round(
       Math.max(0.55, Math.min(0.99, 0.76 + (changedCharacters / originalLength) * 0.2)) *
@@ -195,8 +246,8 @@ export class ResolveMetadataSearchQuery {
 
     const localResult: MetadataSearchQueryResult = {
       query: {
-        title: normalizedTitle,
-        artist: normalizedArtist,
+        title: resolvedTitle,
+        artist: resolvedArtist,
       },
       fallback: { title, artist },
       confidence,
@@ -209,8 +260,8 @@ export class ResolveMetadataSearchQuery {
 
     const candidateByIdentity = new Map<string, DeezerTrackCandidate>();
     for (const candidate of await this.deezer.search({
-      title: normalizedTitle,
-      artist: normalizedArtist,
+      title: resolvedTitle,
+      artist: resolvedArtist,
     })) {
       const identity = `${comparable(candidate.title)}|${comparable(candidate.artist)}`;
       const known = candidateByIdentity.get(identity);
@@ -220,8 +271,8 @@ export class ResolveMetadataSearchQuery {
     }
     const ranked = Array.from(candidateByIdentity.values())
       .map((candidate) => rankCandidate(candidate, {
-        title: normalizedTitle,
-        artist: normalizedArtist,
+        title: resolvedTitle,
+        artist: resolvedArtist,
         durationSeconds: input.durationSeconds,
       }))
       .sort((left, right) => right.score - left.score);
@@ -230,7 +281,7 @@ export class ResolveMetadataSearchQuery {
     const hasClearWinner =
       winner &&
       winner.score >=
-        (normalizedArtist
+        (resolvedArtist
           ? acceptedCandidateScore
           : acceptedTitleOnlyCandidateScore) &&
       (!runnerUp || (winner.score - runnerUp.score) >= acceptedScoreMargin);
