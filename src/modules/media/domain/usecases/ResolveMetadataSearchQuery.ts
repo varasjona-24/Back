@@ -55,6 +55,8 @@ const animeThemeMarkers = [
   /\b(?:opening|ending)\s+theme\b/i,
 ];
 
+const featuredCreditPattern = /\s+(?:feat(?:\.|uring)?|ft\.?)\s+[^\s].*$/i;
+
 const animePresentationMarkers = [
   /\b(?:traducid[ao]|sub(?:tit(?:le|ulo)s?)?|lyrics?|romaji|espa[nñ]ol|english)\b/i,
 ];
@@ -187,6 +189,10 @@ function extractAnimeThemeParts(value: string): EmbeddedCredits | undefined {
   const extractedArtist = cleanExtractedArtist(parts[1]);
   if (!themeTitle || !extractedArtist) return undefined;
   return { title: themeTitle, artist: extractedArtist, matched: true };
+}
+
+function removeFeaturedCreditFromEmbeddedTitle(value: string): string {
+  return cleanInput(value.replace(featuredCreditPattern, '')) || value;
 }
 
 function extractAnimeCredits(
@@ -393,7 +399,12 @@ export class ResolveMetadataSearchQuery {
           normalizedArtist,
           removedArtifacts,
         );
-    const resolvedTitle = delimitedCredits.title || normalizedTitle;
+    const extractedFromVideoTitle =
+      delimitedCredits.matched || delimitedCredits.artist != null;
+    const resolvedTitle = extractedFromVideoTitle
+      ? removeFeaturedCreditFromEmbeddedTitle(delimitedCredits.title) ||
+          normalizedTitle
+      : delimitedCredits.title || normalizedTitle;
     const resolvedArtist = delimitedCredits.clearArtist
       ? ''
       : delimitedCredits.artist || normalizedArtist;
