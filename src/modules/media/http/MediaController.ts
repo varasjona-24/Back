@@ -5,6 +5,7 @@ import path from 'path';
 import { ResolveMedia } from '../domain/usecases/Resolve_Media.js';
 import { ResolveMediaInfo } from '../domain/usecases/ResolveMediaInfo.js';
 import { ResolveMetadataSearchQuery } from '../domain/usecases/ResolveMetadataSearchQuery.js';
+import { MusicBrainzMetadataSearchSource } from '../infra/metadata/MusicBrainzMetadataSearchSource.js';
 import { DownloadMediaVariantUseCase } from '../domain/usecases/Download_Media_Variant_Use_Case.js';
 import { ImportYoutubePlaylistUseCase } from '../domain/usecases/ImportYoutubePlaylistUseCase.js';
 
@@ -217,8 +218,20 @@ export class MediaController {
 
     const resolver = new ResolveMetadataSearchQuery();
     const result = await resolver.execute({ title, artist, durationSeconds });
+    const suggestionsSource = new MusicBrainzMetadataSearchSource();
+    let suggestions: Array<Record<string, unknown>> = [];
+    let suggestionsAvailable = true;
+    try {
+      suggestions = await suggestionsSource.search({
+        title: result.query.title,
+        artist: result.query.artist,
+      });
+    } catch (error) {
+      suggestionsAvailable = false;
+      console.warn('[MediaController.metadataSuggestions] MusicBrainz unavailable', error);
+    }
     res.setHeader('Cache-Control', 'no-store');
-    return res.json(result);
+    return res.json({ ...result, suggestions, suggestionsAvailable });
   }
 
   /* ======================================================
